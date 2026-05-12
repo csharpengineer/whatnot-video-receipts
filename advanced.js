@@ -57,7 +57,7 @@
       items { edges { node {
         quantity
         price { amount __typename }
-        listing { title description
+        listing { title description transactionType
           category { label __typename }
           user { username profileImage { url __typename } premierShopStatus { isPremierShop __typename } isVerifiedSeller __typename }
           __typename
@@ -112,7 +112,7 @@
   // ── Convert GQL edges to rows array [headers, ...dataRows] ───────────────
   function gqlEdgesToRows(edges) {
     const headers = [
-      'uuid', 'Order #', 'Date', 'Status', 'Sales Channel',
+      'uuid', 'Order #', 'Date', 'Status', 'Sales Channel', 'Transaction Type',
       'Item', 'Description', 'Category', 'Seller', 'Seller Avatar', 'Premier Seller', 'Verified Seller',
       'Qty', 'Item Price',
       'Subtotal', 'Shipping', 'Tax', 'Auth Fee', 'Credits', 'Total',
@@ -137,6 +137,7 @@
         fmtDate(node.createdAt),
         fmtStatus(node.status),
         fmtChan(node.salesChannel),
+        listing?.transactionType   || '',
         listing?.title             || '',
         listing?.description       || '',
         listing?.category?.label   || '',
@@ -188,12 +189,14 @@
     if (!rows || rows.length < 2) return rows || [];
     const headers = rows[0];
     const chanCi   = headers.indexOf('Sales Channel');
+    const txTypeCi = headers.indexOf('Transaction Type');
     const statusCi = headers.indexOf('Status');
     const catCi    = headers.indexOf('Category');
     const sellerCi = headers.indexOf('Seller');
     const q = searchQuery.trim().toLowerCase();
     const data = rows.slice(1).filter(row => {
       if (activeFilters.channel.size  > 0 && !activeFilters.channel.has(String(row[chanCi]   ?? ''))) return false;
+      if (activeFilters.txType.size   > 0 && !activeFilters.txType.has(String(row[txTypeCi]  ?? ''))) return false;
       if (activeFilters.status.size   > 0 && !activeFilters.status.has(String(row[statusCi]  ?? ''))) return false;
       if (activeFilters.category.size > 0 && !activeFilters.category.has(String(row[catCi]   ?? ''))) return false;
       if (activeFilters.seller.size   > 0 && !activeFilters.seller.has(String(row[sellerCi]  ?? ''))) return false;
@@ -217,6 +220,7 @@
     const headers = allRows[0];
     const data    = allRows.slice(1);
     const chanCi   = headers.indexOf('Sales Channel');
+    const txTypeCi = headers.indexOf('Transaction Type');
     const statusCi = headers.indexOf('Status');
     const catCi    = headers.indexOf('Category');
     const sellerCi = headers.indexOf('Seller');
@@ -306,10 +310,11 @@
       sidebarEl.appendChild(section);
     }
 
-    makeSection('Sales Channel', 'channel',  chanCi);
-    makeSection('Status',        'status',   statusCi);
-    makeSection('Category',      'category', catCi,    { scrollable: true });
-    makeSection('Seller',        'seller',   sellerCi, { searchable: true, scrollable: true });
+    makeSection('Sales Channel',     'channel', chanCi);
+    makeSection('Transaction Type',   'txType',  txTypeCi);
+    makeSection('Status',             'status',  statusCi);
+    makeSection('Category',           'category', catCi,    { scrollable: true });
+    makeSection('Seller',             'seller',   sellerCi, { searchable: true, scrollable: true });
   }
 
   function formatCacheAge(timestamp) {
@@ -688,7 +693,7 @@ html.dark .wn-adv-order-link-btn:hover { color: #c8c0ff; }
   const DEFAULT_HIDDEN = new Set(['uuid', 'description', 'seller avatar', 'premier seller', 'verified seller', 'auth fee']);
   let hiddenCols        = new Set(DEFAULT_HIDDEN);
   let savedOverlayState = null; // { scrollTop } — set by goToOrder, consumed on back-navigate restore
-  let activeFilters     = { channel: new Set(), status: new Set(), category: new Set(), seller: new Set() };
+  let activeFilters     = { channel: new Set(), txType: new Set(), status: new Set(), category: new Set(), seller: new Set() };
   let searchQuery       = ''; // free-text search across all visible columns
 
   // ── Render the parsed CSV rows into the overlay body ──────────────────────
@@ -1100,6 +1105,7 @@ html.dark .wn-adv-order-link-btn:hover { color: #c8c0ff; }
         }
         if (!rows) {
           const sub = body.querySelector('.wn-adv-sub');
+          if (sub) sub.textContent = 'Fetching from Whatnot\u2026';
           const edges = await fetchAllOrders((count) => {
             if (sub) sub.textContent = `Fetching orders… (${count.toLocaleString()} so far)`;
           });
@@ -1184,7 +1190,7 @@ html.dark .wn-adv-order-link-btn:hover { color: #c8c0ff; }
     sortState     = { col: -1, dir: 'asc' };
     currentRows   = null;
     displayedRows = null;
-    activeFilters = { channel: new Set(), status: new Set(), category: new Set(), seller: new Set() };
+    activeFilters = { channel: new Set(), txType: new Set(), status: new Set(), category: new Set(), seller: new Set() };
     searchQuery   = '';
     // If URL is still the fake path, navigate back
     if (window.location.pathname === ADV_FAKE_PATH) {
