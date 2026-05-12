@@ -462,7 +462,7 @@ html.dark .wn-adv-seller-search { border-color: rgba(255,255,255,0.15); }
 /* ── Main content area ───────────────────────────────────────────────────── */
 #wn-adv-main {
   flex: 1 1 auto;
-  overflow: auto;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
 }
@@ -521,7 +521,9 @@ html.dark #wn-adv-table th:hover { background: rgba(255,255,255,0.05); }
 #wn-adv-table th .wn-sort-arrow { margin-left: 4px; opacity: 0.35; font-style: normal; }
 #wn-adv-table th.wn-sort-active .wn-sort-arrow { opacity: 1; }
 #wn-adv-table td {
-  padding: 7px 12px;
+  padding: 0 12px;
+  height: 36px;
+  box-sizing: border-box;
   border-bottom: 1px solid rgba(0,0,0,0.05);
   white-space: nowrap;
   max-width: 280px;
@@ -539,6 +541,7 @@ html.dark #wn-adv-table tbody tr:hover { background: rgba(255,255,255,0.04); }
   white-space: nowrap;
   position: sticky;
   bottom: 0;
+  z-index: 2;
 }
 html.dark #wn-adv-table tfoot td { border-top-color: rgba(255,255,255,0.1); background: #1a1a1a; }
 
@@ -666,12 +669,15 @@ html.dark .wn-adv-order-link-btn:hover { color: #c8c0ff; }
       container.innerHTML = '<div id="wn-adv-status"><p>No orders found.</p></div>';
       return;
     }
-    const headers = rows[0];
-    let dataRows = rows.slice(1);
+    const headers  = rows[0];
+    let   dataRows = rows.slice(1);
+
+    // ── Virtual scroll constants ──────────────────────────────────────────────
+    const ROW_H   = 36; // px — must match td height set in CSS
+    const OVERSCAN = 10;
 
     // Build index-based hidden set from header names.
     // Only initialise from DEFAULT_HIDDEN on first render (hiddenCols has strings).
-    // On subsequent renders (Reload) keep user-modified index state intact.
     const currentHiddenIsIndexed = [...hiddenCols].every(v => typeof v === 'number');
     if (!currentHiddenIsIndexed) {
       hiddenCols = new Set(
@@ -679,7 +685,7 @@ html.dark .wn-adv-order-link-btn:hover { color: #c8c0ff; }
       );
     }
 
-    // Detect numeric columns (currency or plain number)
+    // Detect numeric columns (currency or plain number) — use full dataset once
     const isNumeric = headers.map((_, ci) =>
       dataRows.every(r => {
         const v = String(r[ci] ?? '').trim().replace(/^\$/, '');
@@ -687,8 +693,7 @@ html.dark .wn-adv-order-link-btn:hover { color: #c8c0ff; }
       })
     );
 
-    // Detect date columns — at least one non-empty value that parses as a date,
-    // and all non-empty values parse as dates. Excludes already-numeric columns.
+    // Detect date columns
     const isDate = headers.map((_, ci) => {
       if (isNumeric[ci]) return false;
       const nonEmpty = dataRows.map(r => String(r[ci] ?? '').trim()).filter(v => v !== '');
@@ -697,23 +702,21 @@ html.dark .wn-adv-order-link-btn:hover { color: #c8c0ff; }
 
     function sortedRows() {
       if (sortState.col < 0) return dataRows;
-      const ci = sortState.col;
+      const ci      = sortState.col;
       const numeric = isNumeric[ci];
       const date    = isDate[ci];
       return [...dataRows].sort((a, b) => {
         const av = String(a[ci] ?? '').trim().replace(/^\$/, '');
         const bv = String(b[ci] ?? '').trim().replace(/^\$/, '');
         let cmp;
-        if (numeric)    { cmp = (parseFloat(av) || 0) - (parseFloat(bv) || 0); }
-        else if (date)  { cmp = (Date.parse(av) || 0) - (Date.parse(bv) || 0); }
-        else            { cmp = av.localeCompare(bv, undefined, { sensitivity: 'base' }); }
+        if (numeric)   { cmp = (parseFloat(av) || 0) - (parseFloat(bv) || 0); }
+        else if (date) { cmp = (Date.parse(av) || 0) - (Date.parse(bv) || 0); }
+        else           { cmp = av.localeCompare(bv, undefined, { sensitivity: 'base' }); }
         return sortState.dir === 'asc' ? cmp : -cmp;
       });
     }
 
-    // Numeric columns that are IDs or counts — don't sum in footer
     const NON_ADDITIVE = new Set(['order #', 'qty']);
-
     function computeTotals(rowset) {
       return headers.map((h, ci) => {
         if (!isNumeric[ci] || NON_ADDITIVE.has(h.toLowerCase())) return '';
@@ -722,6 +725,14 @@ html.dark .wn-adv-order-link-btn:hover { color: #c8c0ff; }
         return hasDollar ? `$${sum.toFixed(2)}` : (Number.isInteger(sum) ? String(sum) : sum.toFixed(2));
       });
     }
+
+    // Precompute special column indices (stable across filter/sort)
+    const orderNumCi = headers.indexOf('Order #');
+    const sellerCi   = headers.indexOf('Seller');
+    const avatarCi   = headers.indexOf('Seller Avatar');
+    const premierCi  = headers.indexOf('Premier Seller');
+    const colCount   = headers.length;
+    const WINGS_SVG  = `<svg fill="none" viewBox="0 0 38 38" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%"><path d="M32.3776 12.1644C31.1032 13.437 31.0795 14.6153 31.4769 16.2019C31.6705 17.0997 31.7725 18.0316 31.7725 18.9872C31.7725 19.7721 31.7037 20.541 31.572 21.2881C31.4939 21.7292 31.3942 22.162 31.2738 22.586C30.3229 25.9369 28.0778 28.744 25.1106 30.4356C24.7941 30.6159 24.6841 31.0184 24.8647 31.3342C24.9694 31.517 25.1482 31.6309 25.342 31.6594C25.483 31.6801 25.6317 31.6557 25.7649 31.5796C26.6107 31.0973 27.4034 30.5326 28.1317 29.8962C29.1625 30.6969 30.7017 31.4334 32.1067 31.0127C33.4494 30.6534 34.2498 29.6602 34.874 28.4751C35.0252 28.188 34.9348 27.8316 34.6681 27.6635C33.5414 26.9535 32.4039 26.4592 31.0569 26.8196C30.9412 26.8504 30.8296 26.8861 30.7218 26.9261C31.2702 26.0917 31.7346 25.1972 32.1031 24.2547C33.3321 24.2784 34.4668 24.0942 35.3868 23.1759C36.3697 22.1944 36.5655 20.9348 36.5125 19.5968C36.4998 19.2726 36.2429 19.0091 35.9277 18.9967C34.8974 18.9561 33.9259 19.0307 33.0822 19.523C33.0886 19.3452 33.0919 19.1666 33.0919 18.9872C33.0919 18.081 33.0087 17.1943 32.8492 16.3341C33.7903 16.2673 34.6562 16.001 35.3868 15.2717C36.3697 14.2903 36.5655 13.0307 36.5125 11.6926C36.4998 11.3684 36.2429 11.105 35.9277 11.0926C34.5964 11.0401 33.3638 11.1798 32.3776 12.1644Z" fill="url(#advwng0)"/><path d="M5.62045 12.1644C6.8948 13.437 6.91851 14.6153 6.52113 16.2019C6.32759 17.0997 6.22554 18.0316 6.22554 18.9872C6.22554 19.7721 6.29435 20.541 6.42604 21.2881C6.50412 21.7292 6.60385 22.162 6.7242 22.586C7.67513 25.9369 9.92025 28.744 12.8874 30.4356C13.2039 30.6159 13.3139 31.0184 13.1333 31.3342C13.0287 31.517 12.8498 31.6309 12.656 31.6594C12.515 31.6801 12.3664 31.6557 12.2331 31.5796C11.3874 31.0973 10.5947 30.5326 9.86639 29.8962C8.83557 30.6969 7.2963 31.4334 5.8913 31.0127C4.54866 30.6534 3.74823 29.6602 3.12408 28.4751C2.9728 28.188 3.06326 27.8316 3.32998 27.6635C4.45666 26.9535 5.59417 26.4592 6.94119 26.8196C7.0569 26.8504 7.16848 26.8861 7.2762 26.9261C6.72781 26.0917 6.26343 25.1972 5.89491 24.2547C4.66592 24.2784 3.53125 24.0942 2.61125 23.1759C1.62836 22.1944 1.43251 20.9348 1.48559 19.5968C1.49822 19.2726 1.75515 19.0091 2.07032 18.9967C3.10063 18.9561 4.07217 19.0307 4.91589 19.523C4.90945 19.3452 4.9061 19.1666 4.9061 18.9872C4.9061 18.081 4.98934 17.1943 5.14886 16.3341C4.20772 16.2673 3.34184 16.001 2.61125 15.2717C1.62836 14.2903 1.43251 13.0307 1.48559 11.6926C1.49822 11.3684 1.75515 11.105 2.07032 11.0926C3.40162 11.0401 4.63422 11.1798 5.62045 12.1644Z" fill="url(#advwng1)"/><defs><linearGradient id="advwng0" x1="30.7666" x2="30.7666" y1="0.4" y2="30.93" gradientUnits="userSpaceOnUse"><stop offset="0.255" stop-color="#F0D400"/><stop offset="1" stop-color="#E39601"/></linearGradient><linearGradient id="advwng1" x1="7.231" x2="7.231" y1="0.4" y2="30.93" gradientUnits="userSpaceOnUse"><stop offset="0.255" stop-color="#F0D400"/><stop offset="1" stop-color="#E39601"/></linearGradient></defs></svg>`;
 
     const wrap = document.createElement('div');
     wrap.id = 'wn-adv-table-wrap';
@@ -761,101 +772,111 @@ html.dark .wn-adv-order-link-btn:hover { color: #c8c0ff; }
     tfoot.appendChild(footTr);
     table.appendChild(tfoot);
 
-    function applyColumnVisibility() {
-      table.querySelectorAll('tr').forEach(tr => {
-        tr.querySelectorAll('th[data-ci], td[data-ci]').forEach(cell => {
-          const ci = Number(cell.dataset.ci);
-          cell.style.display = hiddenCols.has(ci) ? 'none' : '';
-        });
+    // Build a single data row element
+    function makeRow(row) {
+      const tr = document.createElement('tr');
+      const orderId = row[0]; // uuid always col 0
+      headers.forEach((h, ci) => {
+        const td = document.createElement('td');
+        td.dataset.ci = ci;
+        if (ci === orderNumCi) {
+          const btn = document.createElement('button');
+          btn.className = 'wn-adv-order-link-btn';
+          btn.type = 'button';
+          btn.title = 'Open order';
+          btn.textContent = row[ci] ?? '';
+          btn.addEventListener('click', (e) => { e.stopPropagation(); goToOrder(orderId); });
+          td.appendChild(btn);
+          td.title = String(row[ci] ?? '');
+        } else if (ci === sellerCi) {
+          const username  = row[ci] || '';
+          const avatarUrl = avatarCi  >= 0 ? (row[avatarCi]  || '') : '';
+          const isPremier = premierCi >= 0 ? (row[premierCi] === 'Yes') : false;
+          const a = document.createElement('a');
+          a.href = `https://www.whatnot.com/user/${username}`;
+          a.target = '_blank';
+          a.rel = 'noopener noreferrer';
+          a.className = 'wn-adv-seller-link';
+          if (avatarUrl) {
+            const avWrap = document.createElement('span');
+            avWrap.className = 'wn-adv-seller-av-wrap' + (isPremier ? ' wn-premier' : '');
+            const img = document.createElement('img');
+            img.src = avatarUrl;
+            img.className = 'wn-adv-seller-avatar';
+            img.alt = '';
+            avWrap.appendChild(img);
+            if (isPremier) {
+              const wings = document.createElement('span');
+              wings.className = 'wn-adv-seller-wings';
+              wings.innerHTML = WINGS_SVG;
+              avWrap.appendChild(wings);
+            }
+            a.appendChild(avWrap);
+          }
+          a.appendChild(document.createTextNode(username));
+          td.appendChild(a);
+          td.title = username;
+        } else {
+          td.textContent = row[ci] ?? '';
+          td.title = String(row[ci] ?? '');
+        }
+        if (isNumeric[ci]) td.style.textAlign = 'right';
+        if (hiddenCols.has(ci)) td.style.display = 'none';
+        tr.appendChild(td);
       });
+      return tr;
     }
 
-    function rebuildBody() {
-      // Update header sort indicators (skip link column — select by data-ci)
-      headerTr.querySelectorAll('th[data-ci]').forEach((th) => {
-        const ci = Number(th.dataset.ci);
-        th.classList.toggle('wn-sort-active', ci === sortState.col);
-        const arrow = th.querySelector('.wn-sort-arrow');
-        if (ci === sortState.col) {
-          arrow.textContent = sortState.dir === 'asc' ? '▲' : '▼';
-        } else {
-          arrow.textContent = '⬍';
-        }
-      });
-      const sorted = sortedRows();
+    // ── Virtual scroll state ──────────────────────────────────────────────────
+    let sorted      = [];
+    let renderStart = -1;
+    let renderEnd   = -1;
+
+    function renderWindow() {
+      const scrollTop = wrap.scrollTop;
+      const viewH     = wrap.clientHeight;
+      const start = Math.max(0, Math.floor(scrollTop / ROW_H) - OVERSCAN);
+      const end   = Math.min(sorted.length, Math.ceil((scrollTop + viewH) / ROW_H) + OVERSCAN);
+      if (start === renderStart && end === renderEnd) return;
+      renderStart = start;
+      renderEnd   = end;
+
       const frag = document.createDocumentFragment();
-      tbody.innerHTML = '';
-      // Precompute special column indices once per rebuild
-      const orderNumCi = headers.indexOf('Order #');
-      const sellerCi   = headers.indexOf('Seller');
-      const avatarCi   = headers.indexOf('Seller Avatar');
-      const premierCi  = headers.indexOf('Premier Seller');
-      const WINGS_SVG = `<svg fill="none" viewBox="0 0 38 38" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%"><path d="M32.3776 12.1644C31.1032 13.437 31.0795 14.6153 31.4769 16.2019C31.6705 17.0997 31.7725 18.0316 31.7725 18.9872C31.7725 19.7721 31.7037 20.541 31.572 21.2881C31.4939 21.7292 31.3942 22.162 31.2738 22.586C30.3229 25.9369 28.0778 28.744 25.1106 30.4356C24.7941 30.6159 24.6841 31.0184 24.8647 31.3342C24.9694 31.517 25.1482 31.6309 25.342 31.6594C25.483 31.6801 25.6317 31.6557 25.7649 31.5796C26.6107 31.0973 27.4034 30.5326 28.1317 29.8962C29.1625 30.6969 30.7017 31.4334 32.1067 31.0127C33.4494 30.6534 34.2498 29.6602 34.874 28.4751C35.0252 28.188 34.9348 27.8316 34.6681 27.6635C33.5414 26.9535 32.4039 26.4592 31.0569 26.8196C30.9412 26.8504 30.8296 26.8861 30.7218 26.9261C31.2702 26.0917 31.7346 25.1972 32.1031 24.2547C33.3321 24.2784 34.4668 24.0942 35.3868 23.1759C36.3697 22.1944 36.5655 20.9348 36.5125 19.5968C36.4998 19.2726 36.2429 19.0091 35.9277 18.9967C34.8974 18.9561 33.9259 19.0307 33.0822 19.523C33.0886 19.3452 33.0919 19.1666 33.0919 18.9872C33.0919 18.081 33.0087 17.1943 32.8492 16.3341C33.7903 16.2673 34.6562 16.001 35.3868 15.2717C36.3697 14.2903 36.5655 13.0307 36.5125 11.6926C36.4998 11.3684 36.2429 11.105 35.9277 11.0926C34.5964 11.0401 33.3638 11.1798 32.3776 12.1644Z" fill="url(#advwng0)"/><path d="M5.62045 12.1644C6.8948 13.437 6.91851 14.6153 6.52113 16.2019C6.32759 17.0997 6.22554 18.0316 6.22554 18.9872C6.22554 19.7721 6.29435 20.541 6.42604 21.2881C6.50412 21.7292 6.60385 22.162 6.7242 22.586C7.67513 25.9369 9.92025 28.744 12.8874 30.4356C13.2039 30.6159 13.3139 31.0184 13.1333 31.3342C13.0287 31.517 12.8498 31.6309 12.656 31.6594C12.515 31.6801 12.3664 31.6557 12.2331 31.5796C11.3874 31.0973 10.5947 30.5326 9.86639 29.8962C8.83557 30.6969 7.2963 31.4334 5.8913 31.0127C4.54866 30.6534 3.74823 29.6602 3.12408 28.4751C2.9728 28.188 3.06326 27.8316 3.32998 27.6635C4.45666 26.9535 5.59417 26.4592 6.94119 26.8196C7.0569 26.8504 7.16848 26.8861 7.2762 26.9261C6.72781 26.0917 6.26343 25.1972 5.89491 24.2547C4.66592 24.2784 3.53125 24.0942 2.61125 23.1759C1.62836 22.1944 1.43251 20.9348 1.48559 19.5968C1.49822 19.2726 1.75515 19.0091 2.07032 18.9967C3.10063 18.9561 4.07217 19.0307 4.91589 19.523C4.90945 19.3452 4.9061 19.1666 4.9061 18.9872C4.9061 18.081 4.98934 17.1943 5.14886 16.3341C4.20772 16.2673 3.34184 16.001 2.61125 15.2717C1.62836 14.2903 1.43251 13.0307 1.48559 11.6926C1.49822 11.3684 1.75515 11.105 2.07032 11.0926C3.40162 11.0401 4.63422 11.1798 5.62045 12.1644Z" fill="url(#advwng1)"/><defs><linearGradient id="advwng0" x1="30.7666" x2="30.7666" y1="0.4" y2="30.93" gradientUnits="userSpaceOnUse"><stop offset="0.255" stop-color="#F0D400"/><stop offset="1" stop-color="#E39601"/></linearGradient><linearGradient id="advwng1" x1="7.231" x2="7.231" y1="0.4" y2="30.93" gradientUnits="userSpaceOnUse"><stop offset="0.255" stop-color="#F0D400"/><stop offset="1" stop-color="#E39601"/></linearGradient></defs></svg>`;
-      sorted.forEach(row => {
-        const tr = document.createElement('tr');
-        const orderId = row[0]; // uuid is always column 0
-        headers.forEach((h, ci) => {
-          const td = document.createElement('td');
-          td.dataset.ci = ci;
-          if (ci === orderNumCi) {
-            // Order # rendered as a clickable link into the order page
-            const btn = document.createElement('button');
-            btn.className = 'wn-adv-order-link-btn';
-            btn.type = 'button';
-            btn.title = 'Open order';
-            btn.textContent = row[ci] ?? '';
-            btn.addEventListener('click', (e) => { e.stopPropagation(); goToOrder(orderId); });
-            td.appendChild(btn);
-            td.title = String(row[ci] ?? '');
-          } else if (ci === sellerCi) {
-            // Render as avatar (+optional wings) + linked username
-            const username  = row[ci] || '';
-            const avatarUrl = avatarCi  >= 0 ? (row[avatarCi]  || '') : '';
-            const isPremier = premierCi >= 0 ? (row[premierCi] === 'Yes') : false;
-            const a = document.createElement('a');
-            a.href = `https://www.whatnot.com/user/${username}`;
-            a.target = '_blank';
-            a.rel = 'noopener noreferrer';
-            a.className = 'wn-adv-seller-link';
-            if (avatarUrl) {
-              const wrap = document.createElement('span');
-              wrap.className = 'wn-adv-seller-av-wrap' + (isPremier ? ' wn-premier' : '');
-              const img = document.createElement('img');
-              img.src = avatarUrl;
-              img.className = 'wn-adv-seller-avatar';
-              img.alt = '';
-              wrap.appendChild(img);
-              if (isPremier) {
-                const wings = document.createElement('span');
-                wings.className = 'wn-adv-seller-wings';
-                wings.innerHTML = WINGS_SVG;
-                wrap.appendChild(wings);
-              }
-              a.appendChild(wrap);
-            }
-            a.appendChild(document.createTextNode(username));
-            td.appendChild(a);
-            td.title = username;
-          } else {
-            td.textContent = row[ci] ?? '';
-            td.title = String(row[ci] ?? '');
-          }
-          if (isNumeric[ci]) td.style.textAlign = 'right';
-          if (hiddenCols.has(ci)) td.style.display = 'none';
-          tr.appendChild(td);
-        });
-        frag.appendChild(tr);
-      });
+      if (start > 0) {
+        const sp = document.createElement('tr');
+        const td = document.createElement('td');
+        td.colSpan = colCount;
+        td.style.cssText = `height:${start * ROW_H}px;padding:0;border:none;pointer-events:none;`;
+        sp.appendChild(td);
+        frag.appendChild(sp);
+      }
+      for (let i = start; i < end; i++) frag.appendChild(makeRow(sorted[i]));
+      if (end < sorted.length) {
+        const sp = document.createElement('tr');
+        const td = document.createElement('td');
+        td.colSpan = colCount;
+        td.style.cssText = `height:${(sorted.length - end) * ROW_H}px;padding:0;border:none;pointer-events:none;`;
+        sp.appendChild(td);
+        frag.appendChild(sp);
+      }
       tbody.replaceChildren(frag);
-      // Update footer totals
-      const totals = computeTotals(sorted);
+    }
+
+    // rAF-throttled scroll listener
+    let rafId = null;
+    wrap.addEventListener('scroll', () => {
+      if (rafId) return;
+      rafId = requestAnimationFrame(() => { rafId = null; renderWindow(); });
+    }, { passive: true });
+
+    function updateFooter(rowset) {
+      const totals = computeTotals(rowset);
       footTr.innerHTML = '';
       totals.forEach((v, ci) => {
         const td = document.createElement('td');
         td.dataset.ci = ci;
         if (ci === orderNumCi) {
-          // Row count goes in the Order # footer
-          td.textContent = `${sorted.length} orders`;
+          td.textContent = `${rowset.length} orders`;
           td.style.cssText = 'font-size:0.72rem;opacity:0.65;white-space:nowrap';
         } else {
           td.textContent = v;
@@ -866,24 +887,51 @@ html.dark .wn-adv-order-link-btn:hover { color: #c8c0ff; }
       });
     }
 
-    rebuildBody();
-    wrap.appendChild(table);
+    function rebuildBody() {
+      // Update header sort indicators
+      headerTr.querySelectorAll('th[data-ci]').forEach((th) => {
+        const ci = Number(th.dataset.ci);
+        th.classList.toggle('wn-sort-active', ci === sortState.col);
+        const arrow = th.querySelector('.wn-sort-arrow');
+        arrow.textContent = ci === sortState.col ? (sortState.dir === 'asc' ? '▲' : '▼') : '⬍';
+      });
+      sorted = sortedRows();
+      updateFooter(sorted);
+      // Reset virtual window and scroll to top
+      wrap.scrollTop = 0;
+      renderStart = -1;
+      renderEnd   = -1;
+      renderWindow();
+    }
 
-    // Expose column toggle API for Columns popover
+    // Build DOM structure first so wrap.clientHeight is valid when rebuildBody runs
+    wrap.appendChild(table);
+    container.innerHTML = '';
+    container.appendChild(wrap);
+    rebuildBody();
+
+    // ── Expose APIs ───────────────────────────────────────────────────────────
     wrap._toggleColumn = (ci) => {
       if (hiddenCols.has(ci)) hiddenCols.delete(ci); else hiddenCols.add(ci);
-      applyColumnVisibility();
+      // Update thead + tfoot immediately
+      headerTr.querySelectorAll('th[data-ci]').forEach(th => {
+        th.style.display = hiddenCols.has(Number(th.dataset.ci)) ? 'none' : '';
+      });
+      footTr.querySelectorAll('td[data-ci]').forEach(td => {
+        td.style.display = hiddenCols.has(Number(td.dataset.ci)) ? 'none' : '';
+      });
+      // Force re-render visible rows with new column visibility
+      renderStart = -1; renderEnd = -1;
+      renderWindow();
     };
     wrap._headers    = headers;
     wrap._hiddenCols = () => hiddenCols;
-    // Fast update: swap data rows and rebuild tbody+footer without touching thead
     wrap._updateRows = (newDataRows) => {
       dataRows = newDataRows;
       rebuildBody();
     };
-
-    container.innerHTML = '';
-    container.appendChild(wrap);
+    wrap._getScrollTop = () => wrap.scrollTop;
+    wrap._setScrollTop = (t) => { wrap.scrollTop = t; };
   }
 
   // ── Columns popover ────────────────────────────────────────────────────────
@@ -1040,8 +1088,8 @@ html.dark .wn-adv-order-link-btn:hover { color: #c8c0ff; }
       buildSidebar(rows, sidebar, refresh);
       refresh();
       if (scrollTop > 0) requestAnimationFrame(() => {
-        const mainEl = document.getElementById('wn-adv-main');
-        if (mainEl) mainEl.scrollTop = scrollTop;
+        const wrapEl = document.getElementById('wn-adv-table-wrap');
+        if (wrapEl) wrapEl.scrollTop = scrollTop;
       });
     }
 
@@ -1079,8 +1127,8 @@ html.dark .wn-adv-order-link-btn:hover { color: #c8c0ff; }
 
   // ── Navigate to an order, preserving Advanced state for back-navigation ──
   function goToOrder(orderId) {
-    const mainEl = document.getElementById('wn-adv-main');
-    savedOverlayState = { scrollTop: mainEl ? mainEl.scrollTop : 0 };
+    const wrapEl = document.getElementById('wn-adv-table-wrap');
+    savedOverlayState = { scrollTop: wrapEl ? wrapEl.scrollTop : 0 };
     // Remove overlay without resetting module state (currentRows/sortState/hiddenCols preserved)
     const overlay = document.getElementById(ADV_OVERLAY_ID);
     if (overlay) {
