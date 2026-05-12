@@ -1,0 +1,190 @@
+/* ── Native action-item button ─────────────────────────────────────────────── */
+/* The button uses Whatnot's own Tailwind classes for layout/typography.        */
+/* We only need to ensure the cursor and disabled state look right.             */
+#wn-video-receipt-btn {
+  cursor: pointer;
+  width: 100%;
+  background: transparent;
+  border: none;
+  padding: 0;
+  text-align: left;
+}
+
+
+#wn-video-receipt-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ── Overlay backdrop ──────────────────────────────────────────────────────── */
+#wn-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 999999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#wn-overlay-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+}
+
+/* ── Player panel ──────────────────────────────────────────────────────────── */
+#wn-overlay-panel {
+  position: relative;
+  z-index: 1;
+  background: #111;
+  border-radius: 12px;
+  overflow: hidden;
+  width: min(92vw, 900px);
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+}
+
+/* ── Header ───────────────────────────────────────────────────────────────── */
+#wn-overlay-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: #1a1a1a;
+  border-bottom: 1px solid #2a2a2a;
+  flex-shrink: 0;
+}
+
+#wn-overlay-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+#wn-overlay-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+#wn-overlay-controls button {
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid #3a3a3a;
+  background: #2a2a2a;
+  color: #ddd;
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.12s;
+  white-space: nowrap;
+}
+
+#wn-overlay-controls button:hover {
+  background: #3a3a3a;
+  color: #fff;
+}
+
+#wn-btn-close {
+  padding: 6px 10px !important;
+  font-size: 16px !important;
+  border-color: #4a2a2a !important;
+  background: #2a1818 !important;
+  color: #e88 !important;
+}
+
+#wn-btn-close:hover {
+  background: #3a2020 !important;
+  color: #faa !important;
+}
+
+/* ── Video element ─────────────────────────────────────────────────────────── */
+#wn-video {
+  width: 100%;
+  flex: 1;
+  max-height: calc(92vh - 100px);
+  background: #000;
+  display: block;
+}
+
+/* ── Info bar ──────────────────────────────────────────────────────────────── */
+#wn-overlay-info {
+  padding: 8px 14px;
+  background: #1a1a1a;
+  color: #999;
+  font-size: 12px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  flex-shrink: 0;
+}
+
+#wn-overlay-info strong {
+  color: #ccc;
+}
+
+/* ── Download buttons ─────────────────────────────────────────────────────── */
+#wn-btn-dl-full {
+  border-color: #1a3a5a !important;
+  background: #0d2035 !important;
+  color: #6ab4f5 !important;
+}
+
+#wn-btn-dl-full:hover:not(:disabled) {
+  background: #163050 !important;
+  color: #9cd3ff !important;
+}
+
+#wn-btn-dl-full:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+#wn-btn-dl-clip {
+  border-color: #1a3a5a !important;
+  background: #0d2035 !important;
+  color: #6ab4f5 !important;
+}
+
+#wn-btn-dl-clip:hover:not(:disabled) {
+  background: #163050 !important;
+  color: #9cd3ff !important;
+}
+
+#wn-btn-dl-clip:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ── Error toast ───────────────────────────────────────────────────────────── */
+#wn-error-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999999;
+  background: #c0392b;
+  color: #fff;
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  max-width: 480px;
+  text-align: center;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+}
+
+/* -- Activity feed: visually reorder description to appear under the title -- */
+/* Uses CSS order on a flex-column parent � purely visual, React-safe.       */
+/* React's children 1-4 get explicit order values; our .wn-feed-desc sits at   */
+/* order 3 (between title=2 and purchased=4). Shipping stays last at order 6.  */
+a[href^="/order/"] .flex.w-full.flex-col.gap-1 > :nth-child(1) { order: 1; }
+a[href^="/order/"] .flex.w-full.flex-col.gap-1 > :nth-child(2) { order: 2; }
+a[href^="/order/"] .flex.w-full.flex-col.gap-1 > :nth-child(3) { order: 4; }
+a[href^="/order/"] .flex.w-full.flex-col.gap-1 > :nth-child(4) { order: 5; }
+a[href^="/order/"] .flex.w-full.flex-col.gap-1 > .wn-feed-desc     { order: 3; }
+a[href^="/order/"] .flex.w-full.flex-col.gap-1 > .wn-feed-shipping { order: 6; }
+
+/* -- Activity feed: cap image height to its width (prevent stretch) -- */
+a[href^="/order/"] .flex.gap-3 > .shrink-0.aspect-square { align-self: flex-start; }
