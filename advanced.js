@@ -453,16 +453,26 @@ tfoot .wn-adv-link-cell { font-size: 0.72rem; opacity: 0.65; text-align: left; w
       })
     );
 
+    // Detect date columns — at least one non-empty value that parses as a date,
+    // and all non-empty values parse as dates. Excludes already-numeric columns.
+    const isDate = headers.map((_, ci) => {
+      if (isNumeric[ci]) return false;
+      const nonEmpty = dataRows.map(r => String(r[ci] ?? '').trim()).filter(v => v !== '');
+      return nonEmpty.length > 0 && nonEmpty.every(v => !isNaN(Date.parse(v)));
+    });
+
     function sortedRows() {
       if (sortState.col < 0) return dataRows;
       const ci = sortState.col;
       const numeric = isNumeric[ci];
+      const date    = isDate[ci];
       return [...dataRows].sort((a, b) => {
         const av = String(a[ci] ?? '').trim().replace(/^\$/, '');
         const bv = String(b[ci] ?? '').trim().replace(/^\$/, '');
         let cmp;
-        if (numeric) { cmp = (parseFloat(av) || 0) - (parseFloat(bv) || 0); }
-        else { cmp = av.localeCompare(bv, undefined, { sensitivity: 'base' }); }
+        if (numeric)    { cmp = (parseFloat(av) || 0) - (parseFloat(bv) || 0); }
+        else if (date)  { cmp = (Date.parse(av) || 0) - (Date.parse(bv) || 0); }
+        else            { cmp = av.localeCompare(bv, undefined, { sensitivity: 'base' }); }
         return sortState.dir === 'asc' ? cmp : -cmp;
       });
     }
