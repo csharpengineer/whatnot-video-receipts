@@ -362,6 +362,18 @@ html.dark #wn-adv-col-popover {
 }
 #wn-adv-col-popover input[type="checkbox"] { accent-color: #6c5ce7; cursor: pointer; }
 
+/* ── Order link column ───────────────────────────────────────────────────── */
+.wn-adv-link-cell { width: 28px; min-width: 28px; max-width: 28px; text-align: center; padding: 0 2px !important; }
+.wn-adv-link-btn {
+  background: none; border: none; cursor: pointer; padding: 2px 5px;
+  font-size: 0.85rem; line-height: 1; border-radius: 4px;
+  color: #6c5ce7; transition: background 0.15s;
+}
+.wn-adv-link-btn:hover { background: rgba(108,92,231,0.15); }
+html.dark .wn-adv-link-btn { color: #a29bfe; }
+html.dark .wn-adv-link-btn:hover { background: rgba(162,155,254,0.15); }
+tfoot .wn-adv-link-cell { font-size: 0.72rem; opacity: 0.65; text-align: left; white-space: nowrap; }
+
 /* ── Advanced button in Activity header ─────────────────────────────────── */
 #${ADV_BTN_ID} {
   margin-left: auto;
@@ -377,6 +389,7 @@ html.dark #wn-adv-col-popover {
   // Columns hidden by default (matched by lowercase header name)
   const DEFAULT_HIDDEN = new Set(['order id', 'order numeric id', 'buyer', 'order currency', 'taxes currency']);
   let hiddenCols = new Set(DEFAULT_HIDDEN); // indices updated each time headers are known
+  let savedOverlayState = null; // { scrollTop } — set by goToOrder, consumed on back-navigate restore
 
   // ── Render the parsed CSV rows into the overlay body ──────────────────────
   function renderGrid(rows, container) {
@@ -421,7 +434,7 @@ html.dark #wn-adv-col-popover {
 
     function computeTotals(rowset) {
       return headers.map((_, ci) => {
-        if (!isNumeric[ci]) return ci === 0 ? `${rowset.length} orders` : '';
+        if (!isNumeric[ci]) return '';
         const sum = rowset.reduce((acc, r) => acc + (parseFloat((r[ci] || '').replace(/^\$/, '')) || 0), 0);
         const hasDollar = rowset.some(r => (r[ci] || '').trim().startsWith('$'));
         return hasDollar ? `$${sum.toFixed(2)}` : (Number.isInteger(sum) ? String(sum) : sum.toFixed(2));
@@ -437,6 +450,10 @@ html.dark #wn-adv-col-popover {
     // ── thead ──
     const thead = document.createElement('thead');
     const headerTr = document.createElement('tr');
+    // Non-sortable link column header
+    const linkTh = document.createElement('th');
+    linkTh.className = 'wn-adv-link-cell';
+    headerTr.appendChild(linkTh);
     headers.forEach((h, ci) => {
       const th = document.createElement('th');
       th.dataset.ci = ci;
@@ -476,8 +493,9 @@ html.dark #wn-adv-col-popover {
     }
 
     function rebuildBody() {
-      // Update header sort indicators
-      headerTr.querySelectorAll('th').forEach((th, ci) => {
+      // Update header sort indicators (skip link column — select by data-ci)
+      headerTr.querySelectorAll('th[data-ci]').forEach((th) => {
+        const ci = Number(th.dataset.ci);
         th.classList.toggle('wn-sort-active', ci === sortState.col);
         const arrow = th.querySelector('.wn-sort-arrow');
         if (ci === sortState.col) {
@@ -490,6 +508,18 @@ html.dark #wn-adv-col-popover {
       tbody.innerHTML = '';
       sorted.forEach(row => {
         const tr = document.createElement('tr');
+        // Link icon cell (always visible)
+        const linkTd = document.createElement('td');
+        linkTd.className = 'wn-adv-link-cell';
+        const linkBtn = document.createElement('button');
+        linkBtn.className = 'wn-adv-link-btn';
+        linkBtn.type = 'button';
+        linkBtn.title = 'Open order';
+        linkBtn.textContent = '↗';
+        const orderId = row[0]; // order id is always column 0
+        linkBtn.addEventListener('click', (e) => { e.stopPropagation(); goToOrder(orderId); });
+        linkTd.appendChild(linkBtn);
+        tr.appendChild(linkTd);
         headers.forEach((_, ci) => {
           const td = document.createElement('td');
           td.dataset.ci = ci;
@@ -504,6 +534,11 @@ html.dark #wn-adv-col-popover {
       // Update footer totals
       const totals = computeTotals(sorted);
       footTr.innerHTML = '';
+      // Link column footer: row count
+      const linkFootTd = document.createElement('td');
+      linkFootTd.className = 'wn-adv-link-cell';
+      linkFootTd.textContent = `${sorted.length} orders`;
+      footTr.appendChild(linkFootTd);
       totals.forEach((v, ci) => {
         const td = document.createElement('td');
         td.dataset.ci = ci;
@@ -562,12 +597,13 @@ html.dark #wn-adv-col-popover {
   }
 
   // ── Open the Advanced Orders overlay page ───────────────────────────────────
-  function openAdvancedOrders() {
+  function openAdvancedOrders({ skipPush = false, preloadedRows = null, restoreScrollTop = 0 } = {}) {
     if (document.getElementById(ADV_OVERLAY_ID)) return;
     ensureStyles();
-    sortState = { col: -1, dir: 'asc' };
-
-    history.pushState({ wnAdvanced: true }, '', ADV_FAKE_PATH);
+    if (!skipPush) {
+      sortState = { col: -1, dir: 'asc' };
+      history.pushState({ wnAdvanced: true }, '', ADV_FAKE_PATH);
+    }
 
     const overlay = document.createElement('div');
     overlay.id = ADV_OVERLAY_ID;
@@ -609,7 +645,6 @@ html.dark #wn-adv-col-popover {
     reloadBtn.addEventListener('click', () => loadOrders(true));
     colsBtn.addEventListener('click', () => openColumnsPopover(colsBtn));
     window.addEventListener('keydown', onAdvancedEsc);
-    window.addEventListener('popstate', onAdvancedPopState);
 
     async function loadOrders(force) {
       reloadBtn.disabled = true;
@@ -654,7 +689,18 @@ html.dark #wn-adv-col-popover {
       }
     }
 
-    loadOrders(false);
+    if (preloadedRows) {
+      currentRows = preloadedRows;
+      const count = Math.max(0, currentRows.length - 1);
+      meta.textContent = `${count.toLocaleString()} order${count !== 1 ? 's' : ''} · (restored)`;
+      body.innerHTML = '';
+      renderGrid(currentRows, body);
+      exportBtn.disabled = false;
+      colsBtn.disabled   = false;
+      if (restoreScrollTop > 0) requestAnimationFrame(() => { body.scrollTop = restoreScrollTop; });
+    } else {
+      loadOrders(false);
+    }
   }
 
   function closeAdvancedOrders() {
@@ -663,7 +709,6 @@ html.dark #wn-adv-col-popover {
     document.getElementById('wn-adv-col-popover')?.remove();
     overlay.remove();
     window.removeEventListener('keydown', onAdvancedEsc);
-    window.removeEventListener('popstate', onAdvancedPopState);
     // Reset column state so next open re-initialises from defaults
     hiddenCols = new Set(DEFAULT_HIDDEN);
     sortState  = { col: -1, dir: 'asc' };
@@ -678,20 +723,48 @@ html.dark #wn-adv-col-popover {
     if (e.key === 'Escape') closeAdvancedOrders();
   }
 
-  function onAdvancedPopState() {
-    if (window.location.pathname !== ADV_FAKE_PATH) {
+  // ── Navigate to an order, preserving Advanced state for back-navigation ──
+  function goToOrder(orderId) {
+    const bodyEl = document.getElementById('wn-adv-body');
+    savedOverlayState = { scrollTop: bodyEl ? bodyEl.scrollTop : 0 };
+    // Remove overlay without resetting module state (currentRows/sortState/hiddenCols preserved)
+    const overlay = document.getElementById(ADV_OVERLAY_ID);
+    if (overlay) {
+      document.getElementById('wn-adv-col-popover')?.remove();
+      overlay.remove();
+    }
+    window.removeEventListener('keydown', onAdvancedEsc);
+    // Navigate via anchor so React Router handles it as a SPA transition
+    const a = document.createElement('a');
+    a.href = 'https://www.whatnot.com/order/' + orderId;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+
+  // Global popstate — handles navigate-away cleanup and restore-on-back
+  window.addEventListener('popstate', () => {
+    if (window.location.pathname === ADV_FAKE_PATH) {
+      // Back-navigated to advanced view — restore overlay if state is available
+      if (!document.getElementById(ADV_OVERLAY_ID) && savedOverlayState && currentRows) {
+        const { scrollTop } = savedOverlayState;
+        savedOverlayState = null;
+        openAdvancedOrders({ skipPush: true, preloadedRows: currentRows, restoreScrollTop: scrollTop });
+      }
+    } else {
+      // Left the fake path while overlay was open → dismiss it fully
       const overlay = document.getElementById(ADV_OVERLAY_ID);
       if (overlay) {
         document.getElementById('wn-adv-col-popover')?.remove();
         overlay.remove();
         window.removeEventListener('keydown', onAdvancedEsc);
-        window.removeEventListener('popstate', onAdvancedPopState);
-        hiddenCols  = new Set(DEFAULT_HIDDEN);
-        sortState   = { col: -1, dir: 'asc' };
-        currentRows = null;
+        hiddenCols        = new Set(DEFAULT_HIDDEN);
+        sortState         = { col: -1, dir: 'asc' };
+        currentRows       = null;
+        savedOverlayState = null;
       }
     }
-  }
+  });
 
   // ── Inject "Advanced" button into Activity header ───────────────────────────
   function injectAdvancedButton() {
