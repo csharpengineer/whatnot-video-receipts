@@ -7,7 +7,7 @@
   const ADV_OVERLAY_ID    = 'wn-advanced-overlay';
   const ADV_FAKE_PATH     = '/wn-advanced-orders';
   const ADV_STYLE_ID      = 'wn-advanced-styles';
-  const CACHE_KEY_PREFIX  = 'wn_adv_csv_';
+  const CACHE_KEY_PREFIX  = 'wn_adv_gql_';
   const CACHE_TTL_MS      = 15 * 60 * 1000; // 15 minutes
 
   // ── Build auth headers (same pattern as injected.js) ─────────────────────
@@ -42,86 +42,121 @@
     };
   }
 
-  // ── Request CSV report URL from the GQL mutation ──────────────────────────
-  async function fetchCsvUrl() {
-    const startDate = '2000-01-01T00:00:00.000Z';
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const endDate = tomorrow.toISOString();
-
-    const result = await new Promise((resolve, reject) => {
-      chrome.runtime.sendMessage({
-        type: 'WN_FETCH',
-        url: 'https://www.whatnot.com/services/graphql/?operationName=DownloadOrderCSVReport',
-        method: 'POST',
-        headers: buildHeaders(),
-        body: JSON.stringify({
-          operationName: 'DownloadOrderCSVReport',
-          variables: {
-            report_type: 'BUYER_ORDERS',
-            start_date: startDate,
-            end_date: endDate,
-          },
-          query: `mutation DownloadOrderCSVReport($report_type: ReportType!, $order_statuses: [String], $start_date: DateTime, $end_date: DateTime) {
-  orderCSVReport(
-    reportType: $report_type
-    orderStatuses: $order_statuses
-    beforeDate: $start_date
-    afterDate: $end_date
-  ) {
-    fileUrl
-    message
+  // ── GQL query for all purchases ─────────────────────────────────────────
+  const GQL_QUERY = `query GetMyPurchases($first: Int, $after: String) {
+  myOrders(first: $first, after: $after) {
+    pageInfo { hasNextPage endCursor __typename }
+    edges { node {
+      id uuid displayId createdAt status salesChannel
+      total { amount __typename }
+      subtotal { amount __typename }
+      shippingPrice { amount __typename }
+      taxes { amount __typename }
+      credit { amount __typename }
+      authenticationFee { amount __typename }
+      items { edges { node {
+        quantity
+        price { amount __typename }
+        listing { title description
+          category { label __typename }
+          user { username premierShopStatus { isPremierShop __typename } isVerifiedSeller __typename }
+          __typename
+        }
+        shipment { shippingServiceName trackingMetadata { title eta isDelayed isArrivingToday __typename } __typename }
+        __typename
+      } } }
+      __typename
+    } }
     __typename
   }
-}`,
-        }),
-      }, (resp) => {
-        if (chrome.runtime.lastError) return reject(new Error(chrome.runtime.lastError.message));
-        if (resp?.error) return reject(new Error(resp.error));
-        resolve(resp.data);
+}`;
+
+  // ── Fetch all orders via GQL, paginating if needed ───────────────────────
+  async function fetchAllOrders(onProgress) {
+    const GQL_URL = 'https://www.whatnot.com/services/graphql/?operationName=GetMyPurchases';
+    let allEdges = [];
+    let cursor = null;
+    let hasNextPage = true;
+
+    while (hasNextPage) {
+      const data = await new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage({
+          type: 'WN_FETCH',
+          url: GQL_URL,
+          method: 'POST',
+          headers: buildHeaders(),
+          body: JSON.stringify({
+            operationName: 'GetMyPurchases',
+            variables: { first: 2000, after: cursor },
+            query: GQL_QUERY,
+          }),
+        }, (resp) => {
+          if (chrome.runtime.lastError) return reject(new Error(chrome.runtime.lastError.message));
+          if (resp?.error) return reject(new Error(resp.error));
+          resolve(resp.data);
+        });
       });
-    });
 
-    const fileUrl = result?.data?.orderCSVReport?.fileUrl;
-    if (!fileUrl) throw new Error(result?.data?.orderCSVReport?.message || 'No file URL returned');
-    return fileUrl;
-  }
-
-  // ── Fetch CSV text via background (avoids S3 CORS block) ─────────────────
-  async function fetchCsvText(url) {
-    return new Promise((resolve, reject) => {
-      chrome.runtime.sendMessage({ type: 'WN_FETCH_CSV', url }, (resp) => {
-        if (chrome.runtime.lastError) return reject(new Error(chrome.runtime.lastError.message));
-        if (resp?.error) return reject(new Error(resp.error));
-        resolve(resp.text);
-      });
-    });
-  }
-
-  function parseCsv(text) {
-    const rows = [];
-    let field = '';
-    let inQuotes = false;
-    let currentRow = [];
-    for (let i = 0; i < text.length; i++) {
-      const ch = text[i];
-      if (inQuotes) {
-        if (ch === '"' && text[i + 1] === '"') { field += '"'; i++; }
-        else if (ch === '"') { inQuotes = false; }
-        else { field += ch; }
-      } else {
-        if (ch === '"') { inQuotes = true; }
-        else if (ch === ',') { currentRow.push(field); field = ''; }
-        else if (ch === '\n') {
-          currentRow.push(field); field = '';
-          if (currentRow.some(f => f !== '')) rows.push(currentRow);
-          currentRow = [];
-        } else if (ch === '\r') { /* skip */ }
-        else { field += ch; }
-      }
+      const page = data?.data?.myOrders;
+      if (!page) throw new Error(data?.errors?.[0]?.message || 'No order data in response');
+      const edges = page.edges || [];
+      allEdges = allEdges.concat(edges);
+      hasNextPage = page.pageInfo?.hasNextPage || false;
+      cursor = page.pageInfo?.endCursor || null;
+      if (onProgress) onProgress(allEdges.length);
     }
-    if (field || currentRow.length) { currentRow.push(field); if (currentRow.some(f => f !== '')) rows.push(currentRow); }
-    return rows; // rows[0] = headers, rows[1..] = data
+
+    return allEdges;
+  }
+
+  // ── Convert GQL edges to rows array [headers, ...dataRows] ───────────────
+  function gqlEdgesToRows(edges) {
+    const headers = [
+      'uuid', 'Order #', 'Date', 'Status', 'Sales Channel',
+      'Item', 'Description', 'Category', 'Seller', 'Premier Seller', 'Verified Seller',
+      'Qty', 'Item Price',
+      'Subtotal', 'Shipping', 'Tax', 'Auth Fee', 'Credits', 'Total',
+      'Shipping Service', 'ETA', 'Tracking',
+    ];
+    const fmtMoney  = (m) => m?.amount != null ? (m.amount / 100).toFixed(2) : '';
+    const fmtDate   = (s) => s ? new Date(s).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : '';
+    const fmtEta    = (n) => n ? new Date(n * 1000).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : '';
+    const fmtChan   = (s) => ({ LIVESTREAM: 'Live Auction', FIXED_PRICE: 'Fixed Price', AUCTION: 'Auction' })[s] || s || '';
+    const fmtStatus = (s) => s ? s.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, c => c.toUpperCase()) : '';
+
+    const rows = [headers];
+    for (const { node } of edges) {
+      const item     = node.items?.edges?.[0]?.node;
+      const listing  = item?.listing;
+      const seller   = listing?.user;
+      const shipment = item?.shipment;
+      const tracking = shipment?.trackingMetadata;
+      rows.push([
+        node.uuid                  || '',
+        node.displayId             || '',
+        fmtDate(node.createdAt),
+        fmtStatus(node.status),
+        fmtChan(node.salesChannel),
+        listing?.title             || '',
+        listing?.description       || '',
+        listing?.category?.label   || '',
+        seller?.username           || '',
+        seller?.premierShopStatus?.isPremierShop ? 'Yes' : '',
+        seller?.isVerifiedSeller                 ? 'Yes' : '',
+        item?.quantity             ?? '',
+        fmtMoney(item?.price),
+        fmtMoney(node.subtotal),
+        fmtMoney(node.shippingPrice),
+        fmtMoney(node.taxes),
+        fmtMoney(node.authenticationFee),
+        fmtMoney(node.credit),
+        fmtMoney(node.total),
+        shipment?.shippingServiceName || '',
+        fmtEta(tracking?.eta),
+        tracking?.title            || '',
+      ]);
+    }
+    return rows;
   }
 
   // ── Cache helpers ─────────────────────────────────────────────────────────
@@ -141,9 +176,9 @@
     });
   }
 
-  function saveToCache(csvText) {
+  function saveToCache(rows) {
     return new Promise((resolve) => {
-      chrome.storage.local.set({ [getCacheKey()]: { csvText, timestamp: Date.now() } }, resolve);
+      chrome.storage.local.set({ [getCacheKey()]: { rows, timestamp: Date.now() } }, resolve);
     });
   }
 
@@ -387,7 +422,7 @@ tfoot .wn-adv-link-cell { font-size: 0.72rem; opacity: 0.65; text-align: left; w
   let sortState   = { col: -1, dir: 'asc' };
   let currentRows = null; // last loaded [headers, ...data]; used by export
   // Columns hidden by default (matched by lowercase header name)
-  const DEFAULT_HIDDEN = new Set(['order id', 'order numeric id', 'buyer', 'order currency', 'taxes currency']);
+  const DEFAULT_HIDDEN = new Set(['uuid', 'description', 'premier seller', 'verified seller', 'auth fee']);
   let hiddenCols = new Set(DEFAULT_HIDDEN); // indices updated each time headers are known
   let savedOverlayState = null; // { scrollTop } — set by goToOrder, consumed on back-navigate restore
 
@@ -653,25 +688,24 @@ tfoot .wn-adv-link-cell { font-size: 0.72rem; opacity: 0.65; text-align: left; w
         <div id="wn-adv-status">
           <div class="wn-adv-spinner"></div>
           <p>${force ? 'Refreshing orders…' : 'Loading order history…'}</p>
-          <p class="wn-adv-sub">${force ? 'Fetching fresh data…' : 'Checking cache…'}</p>
+          <p class="wn-adv-sub">${force ? 'Fetching from Whatnot…' : 'Checking cache…'}</p>
         </div>`;
       try {
-        let csvText, timestamp;
+        let rows, timestamp;
         if (!force) {
           const cached = await loadFromCache();
-          if (cached) { csvText = cached.csvText; timestamp = cached.timestamp; }
+          if (cached) { rows = cached.rows; timestamp = cached.timestamp; }
         }
-        if (!csvText) {
+        if (!rows) {
           const sub = body.querySelector('.wn-adv-sub');
-          if (sub) sub.textContent = 'Requesting CSV report…';
-          const csvUrl = await fetchCsvUrl();
-          const sub2 = body.querySelector('.wn-adv-sub');
-          if (sub2) sub2.textContent = 'Downloading CSV…';
-          csvText = await fetchCsvText(csvUrl);
+          const edges = await fetchAllOrders((count) => {
+            if (sub) sub.textContent = `Fetching orders… (${count.toLocaleString()} so far)`;
+          });
+          rows = gqlEdgesToRows(edges);
           timestamp = Date.now();
-          await saveToCache(csvText);
+          await saveToCache(rows);
         }
-        currentRows = parseCsv(csvText);
+        currentRows = rows;
         const count = Math.max(0, currentRows.length - 1);
         meta.textContent = `${count.toLocaleString()} order${count !== 1 ? 's' : ''} · Updated ${formatCacheAge(timestamp)}`;
         renderGrid(currentRows, body);
