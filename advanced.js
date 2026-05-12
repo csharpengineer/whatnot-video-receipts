@@ -448,7 +448,7 @@ tfoot .wn-adv-link-cell { font-size: 0.72rem; opacity: 0.65; text-align: left; w
     // Detect numeric columns (currency or plain number)
     const isNumeric = headers.map((_, ci) =>
       dataRows.every(r => {
-        const v = (r[ci] || '').trim().replace(/^\$/, '');
+        const v = String(r[ci] ?? '').trim().replace(/^\$/, '');
         return v === '' || !isNaN(Number(v));
       })
     );
@@ -458,8 +458,8 @@ tfoot .wn-adv-link-cell { font-size: 0.72rem; opacity: 0.65; text-align: left; w
       const ci = sortState.col;
       const numeric = isNumeric[ci];
       return [...dataRows].sort((a, b) => {
-        const av = (a[ci] || '').trim().replace(/^\$/, '');
-        const bv = (b[ci] || '').trim().replace(/^\$/, '');
+        const av = String(a[ci] ?? '').trim().replace(/^\$/, '');
+        const bv = String(b[ci] ?? '').trim().replace(/^\$/, '');
         let cmp;
         if (numeric) { cmp = (parseFloat(av) || 0) - (parseFloat(bv) || 0); }
         else { cmp = av.localeCompare(bv, undefined, { sensitivity: 'base' }); }
@@ -470,8 +470,8 @@ tfoot .wn-adv-link-cell { font-size: 0.72rem; opacity: 0.65; text-align: left; w
     function computeTotals(rowset) {
       return headers.map((_, ci) => {
         if (!isNumeric[ci]) return '';
-        const sum = rowset.reduce((acc, r) => acc + (parseFloat((r[ci] || '').replace(/^\$/, '')) || 0), 0);
-        const hasDollar = rowset.some(r => (r[ci] || '').trim().startsWith('$'));
+        const sum = rowset.reduce((acc, r) => acc + (parseFloat(String(r[ci] ?? '').replace(/^\$/, '')) || 0), 0);
+        const hasDollar = rowset.some(r => String(r[ci] ?? '').trim().startsWith('$'));
         return hasDollar ? `$${sum.toFixed(2)}` : (Number.isInteger(sum) ? String(sum) : sum.toFixed(2));
       });
     }
