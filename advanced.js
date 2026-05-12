@@ -193,6 +193,7 @@
     const statusCi = headers.indexOf('Status');
     const catCi    = headers.indexOf('Category');
     const sellerCi = headers.indexOf('Seller');
+    const dateCi   = headers.indexOf('Date');
     const q = searchQuery.trim().toLowerCase();
     const data = rows.slice(1).filter(row => {
       if (activeFilters.channel.size  > 0 && !activeFilters.channel.has(String(row[chanCi]   ?? ''))) return false;
@@ -200,6 +201,12 @@
       if (activeFilters.status.size   > 0 && !activeFilters.status.has(String(row[statusCi]  ?? ''))) return false;
       if (activeFilters.category.size > 0 && !activeFilters.category.has(String(row[catCi]   ?? ''))) return false;
       if (activeFilters.seller.size   > 0 && !activeFilters.seller.has(String(row[sellerCi]  ?? ''))) return false;
+      if (dateRange.from || dateRange.to) {
+        const d = new Date(row[dateCi] ?? '');
+        if (isNaN(d)) return false;
+        if (dateRange.from && d < dateRange.from) return false;
+        if (dateRange.to   && d > dateRange.to)   return false;
+      }
       if (q) {
         // Check all columns that are not hidden for a match
         const anyMatch = row.some((val, ci) => {
@@ -224,6 +231,82 @@
     const statusCi = headers.indexOf('Status');
     const catCi    = headers.indexOf('Category');
     const sellerCi = headers.indexOf('Seller');
+    const dateCi   = headers.indexOf('Date');
+
+    // ── Date range section ────────────────────────────────────────────────
+    {
+      const section = document.createElement('div');
+      section.className = 'wn-adv-filter-section';
+      const hdr = document.createElement('div');
+      hdr.className = 'wn-adv-filter-hdr';
+      hdr.innerHTML = `<span>Date Range</span><i class="wn-adv-filter-hdr-arrow">▼</i>`;
+      section.appendChild(hdr);
+      const fbody = document.createElement('div');
+      fbody.className = 'wn-adv-filter-body wn-adv-date-body';
+
+      // Compute min/max dates from data
+      let minDate = '', maxDate = '';
+      for (const row of data) {
+        const v = String(row[dateCi] ?? '').trim();
+        if (!v) continue;
+        const iso = new Date(v).toISOString().split('T')[0];
+        if (!minDate || iso < minDate) minDate = iso;
+        if (!maxDate || iso > maxDate) maxDate = iso;
+      }
+
+      const toIso = (d) => d ? d.toISOString().split('T')[0] : '';
+
+      const fromInput = document.createElement('input');
+      fromInput.type = 'date'; fromInput.className = 'wn-adv-date-input';
+      fromInput.value = toIso(dateRange.from);
+      if (minDate) fromInput.min = minDate;
+      if (maxDate) fromInput.max = maxDate;
+
+      const toInput = document.createElement('input');
+      toInput.type = 'date'; toInput.className = 'wn-adv-date-input';
+      toInput.value = toIso(dateRange.to);
+      if (minDate) toInput.min = minDate;
+      if (maxDate) toInput.max = maxDate;
+
+      const clearBtn = document.createElement('button');
+      clearBtn.className = 'wn-adv-filter-clear' + ((dateRange.from || dateRange.to) ? ' visible' : '');
+      clearBtn.type = 'button'; clearBtn.textContent = 'Clear';
+      clearBtn.addEventListener('click', () => {
+        dateRange.from = null; dateRange.to = null;
+        fromInput.value = ''; toInput.value = '';
+        clearBtn.classList.remove('visible');
+        onRefresh();
+      });
+
+      fromInput.addEventListener('change', () => {
+        dateRange.from = fromInput.value ? new Date(fromInput.value + 'T00:00:00') : null;
+        clearBtn.classList.toggle('visible', !!(dateRange.from || dateRange.to));
+        onRefresh();
+      });
+      toInput.addEventListener('change', () => {
+        // End of day for "to" so the selected date is inclusive
+        dateRange.to = toInput.value ? new Date(toInput.value + 'T23:59:59') : null;
+        clearBtn.classList.toggle('visible', !!(dateRange.from || dateRange.to));
+        onRefresh();
+      });
+
+      const fromLabel = document.createElement('label');
+      fromLabel.className = 'wn-adv-date-label'; fromLabel.textContent = 'From';
+      fromLabel.appendChild(fromInput);
+      const toLabel = document.createElement('label');
+      toLabel.className = 'wn-adv-date-label'; toLabel.textContent = 'To';
+      toLabel.appendChild(toInput);
+
+      fbody.appendChild(clearBtn);
+      fbody.appendChild(fromLabel);
+      fbody.appendChild(toLabel);
+      section.appendChild(fbody);
+      hdr.addEventListener('click', () => {
+        const collapsed = fbody.classList.toggle('collapsed');
+        hdr.querySelector('.wn-adv-filter-hdr-arrow').textContent = collapsed ? '▶' : '▼';
+      });
+      sidebarEl.appendChild(section);
+    }
 
     function getUnique(ci) {
       const map = new Map();
@@ -473,6 +556,31 @@ html.dark .wn-adv-filter-clear { color: #a29bfe; }
 html.dark .wn-adv-seller-search { border-color: rgba(255,255,255,0.15); }
 .wn-adv-seller-search:focus { outline: 1px solid #6c5ce7; border-color: #6c5ce7; }
 .wn-adv-filter-scroll { max-height: 200px; overflow-y: auto; }
+.wn-adv-date-body { gap: 4px; padding: 4px 14px 10px; }
+.wn-adv-date-label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.72rem;
+  opacity: 0.6;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.wn-adv-date-input {
+  padding: 4px 6px;
+  border-radius: 4px;
+  border: 1px solid rgba(0,0,0,0.15);
+  background: transparent;
+  color: inherit;
+  font-size: 0.78rem;
+  font-family: inherit;
+  box-sizing: border-box;
+  width: 100%;
+  color-scheme: light;
+}
+html.dark .wn-adv-date-input { border-color: rgba(255,255,255,0.15); color-scheme: dark; }
+.wn-adv-date-input:focus { outline: 1px solid #6c5ce7; border-color: #6c5ce7; }
 /* ── Main content area ───────────────────────────────────────────────────── */
 #wn-adv-main {
   flex: 1 1 auto;
@@ -694,6 +802,7 @@ html.dark .wn-adv-order-link-btn:hover { color: #c8c0ff; }
   let hiddenCols        = new Set(DEFAULT_HIDDEN);
   let savedOverlayState = null; // { scrollTop } — set by goToOrder, consumed on back-navigate restore
   let activeFilters     = { channel: new Set(), txType: new Set(), status: new Set(), category: new Set(), seller: new Set() };
+  let dateRange         = { from: null, to: null }; // Date objects or null
   let searchQuery       = ''; // free-text search across all visible columns
 
   // ── Render the parsed CSV rows into the overlay body ──────────────────────
@@ -1191,6 +1300,7 @@ html.dark .wn-adv-order-link-btn:hover { color: #c8c0ff; }
     currentRows   = null;
     displayedRows = null;
     activeFilters = { channel: new Set(), txType: new Set(), status: new Set(), category: new Set(), seller: new Set() };
+    dateRange     = { from: null, to: null };
     searchQuery   = '';
     // If URL is still the fake path, navigate back
     if (window.location.pathname === ADV_FAKE_PATH) {
