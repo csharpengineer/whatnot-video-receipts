@@ -844,4 +844,12 @@ tfoot .wn-adv-link-cell { font-size: 0.72rem; opacity: 0.65; text-align: left; w
 
   // Attempt immediately in case panel is already rendered
   injectAdvancedButton();
+
+  // ── Auto-open on direct navigation / reload to the fake path ─────────────
+  // The server returns 404 for /wn-advanced-orders, but the content script
+  // still runs. Redirect the URL to / and open the overlay immediately.
+  if (window.location.pathname === ADV_FAKE_PATH) {
+    history.replaceState({}, '', '/');
+    openAdvancedOrders({ skipPush: true });
+  }
 })();
