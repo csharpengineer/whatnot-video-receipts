@@ -477,9 +477,12 @@ tfoot .wn-adv-link-cell { font-size: 0.72rem; opacity: 0.65; text-align: left; w
       });
     }
 
+    // Numeric columns that are IDs or counts — don't sum in footer
+    const NON_ADDITIVE = new Set(['order #', 'qty']);
+
     function computeTotals(rowset) {
-      return headers.map((_, ci) => {
-        if (!isNumeric[ci]) return '';
+      return headers.map((h, ci) => {
+        if (!isNumeric[ci] || NON_ADDITIVE.has(h.toLowerCase())) return '';
         const sum = rowset.reduce((acc, r) => acc + (parseFloat(String(r[ci] ?? '').replace(/^\$/, '')) || 0), 0);
         const hasDollar = rowset.some(r => String(r[ci] ?? '').trim().startsWith('$'));
         return hasDollar ? `$${sum.toFixed(2)}` : (Number.isInteger(sum) ? String(sum) : sum.toFixed(2));
