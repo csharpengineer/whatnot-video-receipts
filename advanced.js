@@ -879,9 +879,18 @@ html.dark .wn-adv-order-link-btn:hover { color: #c8c0ff; }
   // ── Render the parsed CSV rows into the overlay body ──────────────────────
   function renderGrid(rows, container) {
     if (rows.length < 2) {
-      container.innerHTML = '<div id="wn-adv-status"><p>No orders found.</p></div>';
+      const existingWrap = container.querySelector('#wn-adv-table-wrap');
+      if (existingWrap) existingWrap.remove();
+      if (!container.querySelector('#wn-adv-no-orders')) {
+        const d = document.createElement('div');
+        d.id = 'wn-adv-no-orders';
+        d.className = 'wn-adv-status';
+        d.innerHTML = '<p>No orders match current filters.</p>';
+        container.appendChild(d);
+      }
       return;
     }
+    container.querySelector('#wn-adv-no-orders')?.remove();
     const headers  = rows[0];
     let   dataRows = rows.slice(1);
 
@@ -1135,8 +1144,8 @@ html.dark .wn-adv-order-link-btn:hover { color: #c8c0ff; }
 
     // Build DOM structure first so wrap.clientHeight is valid when rebuildBody runs
     wrap.appendChild(table);
-    container.innerHTML = '';
-    container.appendChild(wrap);
+    const existingWrap = container.querySelector('#wn-adv-table-wrap');
+    if (existingWrap) existingWrap.replaceWith(wrap); else container.appendChild(wrap);
     rebuildBody();
 
     // ── Expose APIs ───────────────────────────────────────────────────────────
