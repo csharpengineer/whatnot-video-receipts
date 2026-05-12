@@ -183,6 +183,126 @@
     });
   }
 
+  // ── Filter rows by active sidebar filter selections ──────────────────────
+  function applyFilters(rows) {
+    if (!rows || rows.length < 2) return rows || [];
+    const headers = rows[0];
+    const chanCi   = headers.indexOf('Sales Channel');
+    const statusCi = headers.indexOf('Status');
+    const catCi    = headers.indexOf('Category');
+    const sellerCi = headers.indexOf('Seller');
+    const data = rows.slice(1).filter(row => {
+      if (activeFilters.channel.size  > 0 && !activeFilters.channel.has(String(row[chanCi]   ?? ''))) return false;
+      if (activeFilters.status.size   > 0 && !activeFilters.status.has(String(row[statusCi]  ?? ''))) return false;
+      if (activeFilters.category.size > 0 && !activeFilters.category.has(String(row[catCi]   ?? ''))) return false;
+      if (activeFilters.seller.size   > 0 && !activeFilters.seller.has(String(row[sellerCi]  ?? ''))) return false;
+      return true;
+    });
+    return [headers, ...data];
+  }
+
+  // ── Build left sidebar filter panel ──────────────────────────────────────
+  function buildSidebar(allRows, sidebarEl, onRefresh) {
+    sidebarEl.innerHTML = '';
+    if (!allRows || allRows.length < 2) return;
+    const headers = allRows[0];
+    const data    = allRows.slice(1);
+    const chanCi   = headers.indexOf('Sales Channel');
+    const statusCi = headers.indexOf('Status');
+    const catCi    = headers.indexOf('Category');
+    const sellerCi = headers.indexOf('Seller');
+
+    function getUnique(ci) {
+      const map = new Map();
+      for (const row of data) {
+        const v = String(row[ci] ?? '').trim();
+        if (v) map.set(v, (map.get(v) || 0) + 1);
+      }
+      return [...map.entries()].sort((a, b) => b[1] - a[1]);
+    }
+
+    function makeSection(title, filterKey, ci, { searchable = false, scrollable = false } = {}) {
+      const values = getUnique(ci);
+      if (values.length === 0) return;
+      const activeSet = activeFilters[filterKey];
+
+      const section = document.createElement('div');
+      section.className = 'wn-adv-filter-section';
+
+      const hdr = document.createElement('div');
+      hdr.className = 'wn-adv-filter-hdr';
+      hdr.innerHTML = `<span>${title}</span><i class="wn-adv-filter-hdr-arrow">▼</i>`;
+      section.appendChild(hdr);
+
+      const fbody = document.createElement('div');
+      fbody.className = 'wn-adv-filter-body';
+
+      const clearBtn = document.createElement('button');
+      clearBtn.className = 'wn-adv-filter-clear' + (activeSet.size > 0 ? ' visible' : '');
+      clearBtn.type = 'button';
+      clearBtn.textContent = 'Clear';
+      clearBtn.addEventListener('click', () => {
+        activeSet.clear();
+        buildSidebar(allRows, sidebarEl, onRefresh);
+        onRefresh();
+      });
+      fbody.appendChild(clearBtn);
+
+      if (searchable) {
+        const search = document.createElement('input');
+        search.type = 'text';
+        search.className = 'wn-adv-seller-search';
+        search.placeholder = `Search…`;
+        search.addEventListener('input', () => {
+          const q = search.value.toLowerCase();
+          listEl.querySelectorAll('.wn-adv-filter-item').forEach(item => {
+            item.style.display = (item.dataset.val || '').toLowerCase().includes(q) ? '' : 'none';
+          });
+        });
+        fbody.appendChild(search);
+      }
+
+      const listEl = document.createElement('div');
+      if (scrollable) listEl.className = 'wn-adv-filter-scroll';
+
+      values.forEach(([v, count]) => {
+        const item = document.createElement('label');
+        item.className = 'wn-adv-filter-item';
+        item.dataset.val = v;
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = activeSet.has(v);
+        cb.addEventListener('change', () => {
+          if (cb.checked) activeSet.add(v); else activeSet.delete(v);
+          clearBtn.classList.toggle('visible', activeSet.size > 0);
+          onRefresh();
+        });
+        const nameSpan = document.createElement('span');
+        nameSpan.textContent = v;
+        const countSpan = document.createElement('span');
+        countSpan.className = 'wn-adv-filter-count';
+        countSpan.textContent = count;
+        item.appendChild(cb);
+        item.appendChild(nameSpan);
+        item.appendChild(countSpan);
+        listEl.appendChild(item);
+      });
+      fbody.appendChild(listEl);
+      section.appendChild(fbody);
+
+      hdr.addEventListener('click', () => {
+        const collapsed = fbody.classList.toggle('collapsed');
+        hdr.querySelector('.wn-adv-filter-hdr-arrow').textContent = collapsed ? '▶' : '▼';
+      });
+      sidebarEl.appendChild(section);
+    }
+
+    makeSection('Sales Channel', 'channel',  chanCi);
+    makeSection('Status',        'status',   statusCi);
+    makeSection('Category',      'category', catCi,    { scrollable: true });
+    makeSection('Seller',        'seller',   sellerCi, { searchable: true, scrollable: true });
+  }
+
   function formatCacheAge(timestamp) {
     const ageMins = Math.floor((Date.now() - timestamp) / 60000);
     if (ageMins < 1) return 'just now';
@@ -192,8 +312,9 @@
 
   // ── Export currently loaded rows as a CSV file download ───────────────────
   function exportCurrentGrid() {
-    if (!currentRows || currentRows.length < 1) return;
-    const csvContent = currentRows.map(row =>
+    const rows = displayedRows || currentRows;
+    if (!rows || rows.length < 1) return;
+    const csvContent = rows.map(row =>
       row.map(field => {
         const s = String(field ?? '');
         return (s.includes(',') || s.includes('"') || s.includes('\n'))
@@ -263,6 +384,83 @@ html.dark #wn-adv-back:hover { background: rgba(255,255,255,0.1); }
   white-space: nowrap;
 }
 #wn-adv-body {
+  flex: 1 1 auto;
+  overflow: hidden;
+  display: flex;
+  flex-direction: row;
+}
+/* ── Sidebar ─────────────────────────────────────────────────────────────── */
+#wn-adv-sidebar {
+  width: 196px;
+  min-width: 196px;
+  flex-shrink: 0;
+  overflow-y: auto;
+  border-right: 1px solid rgba(0,0,0,0.08);
+  padding: 8px 0 20px;
+}
+html.dark #wn-adv-sidebar { border-right-color: rgba(255,255,255,0.08); }
+.wn-adv-filter-section { border-bottom: 1px solid rgba(0,0,0,0.06); }
+html.dark .wn-adv-filter-section { border-bottom-color: rgba(255,255,255,0.06); }
+.wn-adv-filter-hdr {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px 6px;
+  cursor: pointer;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  opacity: 0.5;
+  user-select: none;
+}
+.wn-adv-filter-hdr:hover { opacity: 0.8; }
+.wn-adv-filter-hdr-arrow { font-style: normal; font-size: 0.6rem; flex-shrink: 0; }
+.wn-adv-filter-body { display: flex; flex-direction: column; padding-bottom: 6px; }
+.wn-adv-filter-body.collapsed { display: none; }
+.wn-adv-filter-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 3px 14px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  user-select: none;
+}
+.wn-adv-filter-item:hover { background: rgba(0,0,0,0.04); }
+html.dark .wn-adv-filter-item:hover { background: rgba(255,255,255,0.05); }
+.wn-adv-filter-item input[type="checkbox"] { accent-color: #6c5ce7; cursor: pointer; flex-shrink: 0; }
+.wn-adv-filter-count { margin-left: auto; opacity: 0.38; font-size: 0.72rem; }
+.wn-adv-filter-clear {
+  align-self: flex-end;
+  margin: 0 14px 2px;
+  font-size: 0.7rem;
+  color: #6c5ce7;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  visibility: hidden;
+}
+.wn-adv-filter-clear.visible { visibility: visible; }
+html.dark .wn-adv-filter-clear { color: #a29bfe; }
+.wn-adv-seller-search {
+  margin: 2px 14px 5px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(0,0,0,0.15);
+  background: transparent;
+  color: inherit;
+  font-size: 0.78rem;
+  font-family: inherit;
+  box-sizing: border-box;
+  width: calc(100% - 28px);
+}
+html.dark .wn-adv-seller-search { border-color: rgba(255,255,255,0.15); }
+.wn-adv-seller-search:focus { outline: 1px solid #6c5ce7; border-color: #6c5ce7; }
+.wn-adv-filter-scroll { max-height: 200px; overflow-y: auto; }
+/* ── Main content area ───────────────────────────────────────────────────── */
+#wn-adv-main {
   flex: 1 1 auto;
   overflow: auto;
   display: flex;
@@ -452,12 +650,15 @@ html.dark .wn-adv-order-link-btn:hover { color: #c8c0ff; }
   }
 
   // ── Persistent state ─────────────────────────────────────────────────────
-  let sortState   = { col: -1, dir: 'asc' };
-  let currentRows = null; // last loaded [headers, ...data]; used by export
+  let sortState         = { col: -1, dir: 'asc' };
+  let currentRows       = null;  // all loaded rows [headers, ...data]
+  let displayedRows     = null;  // post-filter rows currently shown in grid
+  let lastCacheTimestamp = null; // timestamp of last successful load
   // Columns hidden by default (matched by lowercase header name)
   const DEFAULT_HIDDEN = new Set(['uuid', 'description', 'seller avatar', 'premier seller', 'verified seller', 'auth fee']);
-  let hiddenCols = new Set(DEFAULT_HIDDEN); // indices updated each time headers are known
+  let hiddenCols        = new Set(DEFAULT_HIDDEN);
   let savedOverlayState = null; // { scrollTop } — set by goToOrder, consumed on back-navigate restore
+  let activeFilters     = { channel: new Set(), status: new Set(), category: new Set(), seller: new Set() };
 
   // ── Render the parsed CSV rows into the overlay body ──────────────────────
   function renderGrid(rows, container) {
@@ -784,10 +985,9 @@ html.dark .wn-adv-order-link-btn:hover { color: #c8c0ff; }
           timestamp = Date.now();
           await saveToCache(rows);
         }
-        currentRows = rows;
-        const count = Math.max(0, currentRows.length - 1);
-        meta.textContent = `${count.toLocaleString()} order${count !== 1 ? 's' : ''} · Updated ${formatCacheAge(timestamp)}`;
-        renderGrid(currentRows, body);
+        currentRows        = rows;
+        lastCacheTimestamp = timestamp;
+        showGrid(rows);
         exportBtn.disabled = false;
         colsBtn.disabled   = false;
       } catch (err) {
@@ -802,15 +1002,41 @@ html.dark .wn-adv-order-link-btn:hover { color: #c8c0ff; }
       }
     }
 
+    // ── Render sidebar + grid ────────────────────────────────────────────────
+    function showGrid(rows, scrollTop = 0) {
+      body.innerHTML = '';
+      const sidebar = document.createElement('div');
+      sidebar.id = 'wn-adv-sidebar';
+      const main = document.createElement('div');
+      main.id = 'wn-adv-main';
+      body.appendChild(sidebar);
+      body.appendChild(main);
+
+      function refresh() {
+        displayedRows = applyFilters(rows);
+        const total    = Math.max(0, rows.length - 1);
+        const filtered = Math.max(0, displayedRows.length - 1);
+        const countStr = filtered === total
+          ? `${total.toLocaleString()} order${total !== 1 ? 's' : ''}`
+          : `${filtered.toLocaleString()} of ${total.toLocaleString()} orders`;
+        const ageStr = lastCacheTimestamp ? ` \u00b7 Updated ${formatCacheAge(lastCacheTimestamp)}` : ' \u00b7 (restored)';
+        meta.textContent = countStr + ageStr;
+        renderGrid(displayedRows, main);
+      }
+
+      buildSidebar(rows, sidebar, refresh);
+      refresh();
+      if (scrollTop > 0) requestAnimationFrame(() => {
+        const mainEl = document.getElementById('wn-adv-main');
+        if (mainEl) mainEl.scrollTop = scrollTop;
+      });
+    }
+
     if (preloadedRows) {
       currentRows = preloadedRows;
-      const count = Math.max(0, currentRows.length - 1);
-      meta.textContent = `${count.toLocaleString()} order${count !== 1 ? 's' : ''} · (restored)`;
-      body.innerHTML = '';
-      renderGrid(currentRows, body);
       exportBtn.disabled = false;
       colsBtn.disabled   = false;
-      if (restoreScrollTop > 0) requestAnimationFrame(() => { body.scrollTop = restoreScrollTop; });
+      showGrid(preloadedRows, restoreScrollTop);
     } else {
       loadOrders(false);
     }
@@ -822,10 +1048,12 @@ html.dark .wn-adv-order-link-btn:hover { color: #c8c0ff; }
     document.getElementById('wn-adv-col-popover')?.remove();
     overlay.remove();
     window.removeEventListener('keydown', onAdvancedEsc);
-    // Reset column state so next open re-initialises from defaults
-    hiddenCols = new Set(DEFAULT_HIDDEN);
-    sortState  = { col: -1, dir: 'asc' };
-    currentRows = null;
+    // Reset state so next open re-initialises from defaults
+    hiddenCols    = new Set(DEFAULT_HIDDEN);
+    sortState     = { col: -1, dir: 'asc' };
+    currentRows   = null;
+    displayedRows = null;
+    activeFilters = { channel: new Set(), status: new Set(), category: new Set(), seller: new Set() };
     // If URL is still the fake path, navigate back
     if (window.location.pathname === ADV_FAKE_PATH) {
       history.back();
@@ -838,8 +1066,8 @@ html.dark .wn-adv-order-link-btn:hover { color: #c8c0ff; }
 
   // ── Navigate to an order, preserving Advanced state for back-navigation ──
   function goToOrder(orderId) {
-    const bodyEl = document.getElementById('wn-adv-body');
-    savedOverlayState = { scrollTop: bodyEl ? bodyEl.scrollTop : 0 };
+    const mainEl = document.getElementById('wn-adv-main');
+    savedOverlayState = { scrollTop: mainEl ? mainEl.scrollTop : 0 };
     // Remove overlay without resetting module state (currentRows/sortState/hiddenCols preserved)
     const overlay = document.getElementById(ADV_OVERLAY_ID);
     if (overlay) {
