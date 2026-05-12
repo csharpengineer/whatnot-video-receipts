@@ -847,9 +847,13 @@ tfoot .wn-adv-link-cell { font-size: 0.72rem; opacity: 0.65; text-align: left; w
 
   // ── Auto-open on direct navigation / reload to the fake path ─────────────
   // The server returns 404 for /wn-advanced-orders, but the content script
-  // still runs. Redirect the URL to / and open the overlay immediately.
+  // still runs. Do a real navigation to / (loads the live React app) and set
+  // a sessionStorage flag so the overlay reopens once the real page loads.
   if (window.location.pathname === ADV_FAKE_PATH) {
-    history.replaceState({}, '', '/');
-    openAdvancedOrders({ skipPush: true });
+    sessionStorage.setItem('wn_adv_reopen', '1');
+    location.replace('/');
+  } else if (sessionStorage.getItem('wn_adv_reopen')) {
+    sessionStorage.removeItem('wn_adv_reopen');
+    openAdvancedOrders();
   }
 })();
