@@ -119,7 +119,7 @@
       'Shipping Service', 'ETA', 'Tracking',
     ];
     const fmtMoney  = (m) => m?.amount != null ? (m.amount / 100).toFixed(2) : '';
-    const fmtDate   = (s) => s ? new Date(s).toLocaleString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
+    const fmtDate   = (s) => s ? new Date(s).toLocaleString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit' }) : '';
     const fmtEta    = (n) => n ? new Date(n * 1000).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : '';
     const fmtChan   = (s) => ({ LIVESTREAM: 'Live Auction', FIXED_PRICE: 'Fixed Price', AUCTION: 'Auction' })[s] || s || '';
     const fmtStatus = (s) => s ? s.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, c => c.toUpperCase()) : '';
