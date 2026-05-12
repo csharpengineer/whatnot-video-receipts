@@ -3,24 +3,30 @@
   "name": "Whatnot Video Receipt",
   "version": "1.0",
   "description": "Watch your video receipt (livestream recording) on Whatnot order pages.",
-  "permissions": ["downloads"],
+  "permissions": ["downloads", "storage"],
   "background": { "service_worker": "background.js" },
   "host_permissions": [
     "https://www.whatnot.com/*",
     "https://api.whatnot.com/*",
-    "https://s3ntry.whatnot.com/*"
+    "https://s3ntry.whatnot.com/*",
+    "https://whatnot-shipping.s3.amazonaws.com/*"
   ],
   "content_scripts": [
     {
-      "matches": ["https://www.whatnot.com/order/*"],
+      "matches": ["https://www.whatnot.com/*"],
       "js": ["early_content.js"],
       "world": "MAIN",
       "run_at": "document_start"
     },
     {
-      "matches": ["https://www.whatnot.com/order/*"],
+      "matches": ["https://www.whatnot.com/*"],
       "js": ["content.js"],
       "css": ["content.css"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://www.whatnot.com/*"],
+      "js": ["advanced.js"],
       "run_at": "document_idle"
     }
   ],

@@ -175,6 +175,55 @@
   box-shadow: 0 4px 20px rgba(0,0,0,0.4);
 }
 
+/* ── Video player: light-mode overrides (Whatnot uses html.dark for dark) ─── */
+html:not(.dark) #wn-overlay-panel {
+  background: #f5f5f5;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.2);
+}
+html:not(.dark) #wn-overlay-header {
+  background: #fff;
+  border-bottom-color: rgba(0, 0, 0, 0.1);
+}
+html:not(.dark) #wn-overlay-title {
+  color: #111;
+}
+html:not(.dark) #wn-overlay-controls button {
+  background: #f0f0f0;
+  border-color: rgba(0, 0, 0, 0.15);
+  color: #333;
+}
+html:not(.dark) #wn-overlay-controls button:hover {
+  background: #e0e0e0;
+  color: #111;
+}
+html:not(.dark) #wn-btn-close {
+  background: #fff0f0 !important;
+  border-color: rgba(200, 0, 0, 0.2) !important;
+  color: #c0392b !important;
+}
+html:not(.dark) #wn-btn-close:hover {
+  background: #ffe0e0 !important;
+  color: #a93226 !important;
+}
+html:not(.dark) #wn-overlay-info {
+  background: #fff;
+  color: #555;
+}
+html:not(.dark) #wn-overlay-info strong {
+  color: #222;
+}
+html:not(.dark) #wn-btn-dl-full,
+html:not(.dark) #wn-btn-dl-clip {
+  background: #e8f4ff !important;
+  border-color: rgba(0, 100, 200, 0.25) !important;
+  color: #0066cc !important;
+}
+html:not(.dark) #wn-btn-dl-full:hover:not(:disabled),
+html:not(.dark) #wn-btn-dl-clip:hover:not(:disabled) {
+  background: #d0e8ff !important;
+  color: #0055aa !important;
+}
+
 /* -- Activity feed: visually reorder description to appear under the title -- */
 /* Uses CSS order on a flex-column parent � purely visual, React-safe.       */
 /* React's children 1-4 get explicit order values; our .wn-feed-desc sits at   */
