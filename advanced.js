@@ -161,6 +161,44 @@
     return rows;
   }
 
+  // ── KPI bar ───────────────────────────────────────────────────────────────
+  function updateKPIs(rows, el) {
+    const dataRows = rows.slice(1);
+    const headers  = rows[0];
+    const totalCi  = headers.indexOf('Total');
+    const shipCi   = headers.indexOf('Shipping');
+    const creditCi = headers.indexOf('Credits');
+    const txTypeCi = headers.indexOf('Transaction Type');
+
+    let totalSpent = 0, shippingPaid = 0, creditsApplied = 0, giveaways = 0;
+    for (const row of dataRows) {
+      const t = parseFloat(row[totalCi]  ?? '');
+      const s = parseFloat(row[shipCi]   ?? '');
+      const c = parseFloat(row[creditCi] ?? '');
+      if (!isNaN(t)) totalSpent    += t;
+      if (!isNaN(s)) shippingPaid  += s;
+      if (!isNaN(c)) creditsApplied += c;
+      if (row[txTypeCi] === 'GIVEAWAY') giveaways++;
+    }
+
+    const fmt = (n) => '$' + n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    const cards = [
+      { label: 'Orders',          value: dataRows.length.toLocaleString() },
+      { label: 'Total Spent',     value: fmt(totalSpent) },
+      { label: 'Shipping Paid',   value: fmt(shippingPaid) },
+      { label: 'Credits Applied', value: fmt(creditsApplied) },
+      { label: 'Giveaways',       value: giveaways.toLocaleString() },
+    ];
+
+    el.innerHTML = '';
+    for (const { label, value } of cards) {
+      const card = document.createElement('div');
+      card.className = 'wn-adv-kpi-card';
+      card.innerHTML = `<span class="wn-adv-kpi-label">${label}</span><span class="wn-adv-kpi-value">${value}</span>`;
+      el.appendChild(card);
+    }
+  }
+
   // ── Cache helpers ─────────────────────────────────────────────────────────
   function getCacheKey() {
     const usidMatch = document.cookie.match(/(?:^|;\s*)usid=([^;]+)/);
@@ -587,6 +625,39 @@ html.dark .wn-adv-date-input { border-color: rgba(255,255,255,0.15); color-schem
   overflow: hidden;
   display: flex;
   flex-direction: column;
+}
+/* ── KPI cards ───────────────────────────────────────────────────────────── */
+#wn-adv-kpi {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 12px 8px;
+  border-bottom: 1px solid rgba(0,0,0,0.07);
+  flex-shrink: 0;
+}
+html.dark #wn-adv-kpi { border-bottom-color: rgba(255,255,255,0.07); }
+.wn-adv-kpi-card {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 6px 14px;
+  border-radius: 6px;
+  background: rgba(0,0,0,0.03);
+  border: 1px solid rgba(0,0,0,0.07);
+  min-width: 90px;
+}
+html.dark .wn-adv-kpi-card { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.08); }
+.wn-adv-kpi-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.45;
+}
+.wn-adv-kpi-value {
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
 /* ── Loading / error states ─────────────────────────────────────────────── */
 #wn-adv-status {
@@ -1251,6 +1322,10 @@ html.dark .wn-adv-order-link-btn:hover { color: #c8c0ff; }
       body.appendChild(sidebar);
       body.appendChild(main);
 
+      const kpiEl = document.createElement('div');
+      kpiEl.id = 'wn-adv-kpi';
+      main.appendChild(kpiEl);
+
       function refresh() {
         displayedRows = applyFilters(rows);
         const total    = Math.max(0, rows.length - 1);
@@ -1260,6 +1335,7 @@ html.dark .wn-adv-order-link-btn:hover { color: #c8c0ff; }
           : `${filtered.toLocaleString()} of ${total.toLocaleString()} orders`;
         const ageStr = lastCacheTimestamp ? ` \u00b7 Updated ${formatCacheAge(lastCacheTimestamp)}` : ' \u00b7 (restored)';
         meta.textContent = countStr + ageStr;
+        updateKPIs(displayedRows, kpiEl);
         // If table already rendered, only swap data rows (skip thead rebuild + column analysis)
         const existingWrap = main.querySelector('#wn-adv-table-wrap');
         if (existingWrap && existingWrap._updateRows) {
