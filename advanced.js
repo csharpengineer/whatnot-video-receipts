@@ -161,6 +161,142 @@
     return rows;
   }
 
+  // ── Chart.js loader (singleton) ───────────────────────────────────────────────────────
+  let _chartJsPromise = null;
+  function loadChartJs() {
+    if (_chartJsPromise) return _chartJsPromise;
+    if (window.Chart) { _chartJsPromise = Promise.resolve(window.Chart); return _chartJsPromise; }
+    _chartJsPromise = new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js';
+      s.onload  = () => resolve(window.Chart);
+      s.onerror = () => reject(new Error('Failed to load Chart.js'));
+      document.head.appendChild(s);
+    });
+    return _chartJsPromise;
+  }
+
+  // ── Render charts into panel ───────────────────────────────────────────────────────
+  function renderCharts(rows, panel) {
+    const dataRows = rows.slice(1);
+    const headers  = rows[0];
+    const dateCi   = headers.indexOf('Date');
+    const totalCi  = headers.indexOf('Total');
+    const catCi    = headers.indexOf('Category');
+    const chanCi   = headers.indexOf('Sales Channel');
+    const txTypeCi = headers.indexOf('Transaction Type');
+
+    // ── Spending by month (line) ─────────────────────────────────────────
+    const monthMap = new Map(); // 'YYYY-MM' → total
+    for (const row of dataRows) {
+      const d = new Date(row[dateCi] ?? '');
+      if (isNaN(d)) continue;
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const v   = parseFloat(row[totalCi] ?? '') || 0;
+      monthMap.set(key, (monthMap.get(key) ?? 0) + v);
+    }
+    const sortedMonths = [...monthMap.keys()].sort();
+    const monthLabels  = sortedMonths.map(k => {
+      const [y, m] = k.split('-');
+      return new Date(Number(y), Number(m) - 1).toLocaleString('en-US', { month: 'short', year: '2-digit' });
+    });
+    const monthTotals = sortedMonths.map(k => +monthMap.get(k).toFixed(2));
+
+    // ── Top 10 categories by spend (horizontal bar) ──────────────────────
+    const catMap = new Map();
+    for (const row of dataRows) {
+      const cat = String(row[catCi] ?? '').trim() || 'Uncategorized';
+      const v   = parseFloat(row[totalCi] ?? '') || 0;
+      catMap.set(cat, (catMap.get(cat) ?? 0) + v);
+    }
+    const topCats = [...catMap.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10);
+
+    // ── Transaction type breakdown (doughnut) ──────────────────────────
+    const txMap = new Map();
+    for (const row of dataRows) {
+      const tx = String(row[txTypeCi] ?? '').trim() || 'Unknown';
+      txMap.set(tx, (txMap.get(tx) ?? 0) + 1);
+    }
+    const txLabels = [...txMap.keys()];
+    const txCounts = txLabels.map(k => txMap.get(k));
+
+    const isDark = document.documentElement.classList.contains('dark');
+    const gridColor  = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)';
+    const textColor  = isDark ? '#ccc' : '#333';
+    const accent     = '#6c5ce7';
+    const PALETTE    = ['#6c5ce7','#00cec9','#fdcb6e','#e17055','#0984e3','#a29bfe','#55efc4','#fab1a0','#74b9ff','#fd79a8'];
+
+    function makeCard(title, w, h) {
+      const card = document.createElement('div');
+      card.className = 'wn-adv-chart-card';
+      card.style.cssText = `width:${w}px;`;
+      const lbl = document.createElement('div');
+      lbl.className = 'wn-adv-chart-title';
+      lbl.textContent = title;
+      const canvas = document.createElement('canvas');
+      canvas.width  = w - 36; // account for card padding
+      canvas.height = h;
+      card.appendChild(lbl);
+      card.appendChild(canvas);
+      panel.appendChild(card);
+      return canvas;
+    }
+
+    const Chart = window.Chart;
+    const baseOpts = {
+      animation: false,
+      plugins: { legend: { labels: { color: textColor, font: { size: 11 } } } },
+    };
+
+    // Spending over time
+    if (sortedMonths.length > 0) {
+      const c = makeCard('Spending Over Time', 560, 200);
+      new Chart(c, {
+        type: 'line',
+        data: {
+          labels: monthLabels,
+          datasets: [{ label: 'Total ($)', data: monthTotals, borderColor: accent, backgroundColor: accent + '22',
+            fill: true, tension: 0.3, pointRadius: 3, pointHoverRadius: 5 }],
+        },
+        options: { ...baseOpts, scales: {
+          x: { ticks: { color: textColor, maxRotation: 45 }, grid: { color: gridColor } },
+          y: { ticks: { color: textColor, callback: v => '$' + v }, grid: { color: gridColor } },
+        }, plugins: { ...baseOpts.plugins, legend: { display: false } } },
+      });
+    }
+
+    // Top categories
+    if (topCats.length > 0) {
+      const c = makeCard('Top Categories by Spend', 400, 220);
+      new Chart(c, {
+        type: 'bar',
+        data: {
+          labels: topCats.map(([k]) => k),
+          datasets: [{ data: topCats.map(([,v]) => +v.toFixed(2)),
+            backgroundColor: PALETTE.slice(0, topCats.length), borderRadius: 4 }],
+        },
+        options: { ...baseOpts, indexAxis: 'y',
+          scales: {
+            x: { ticks: { color: textColor, callback: v => '$' + v }, grid: { color: gridColor } },
+            y: { ticks: { color: textColor } },
+          }, plugins: { ...baseOpts.plugins, legend: { display: false } } },
+      });
+    }
+
+    // Transaction type breakdown
+    if (txLabels.length > 0) {
+      const c = makeCard('Transaction Types', 240, 200);
+      new Chart(c, {
+        type: 'doughnut',
+        data: {
+          labels: txLabels,
+          datasets: [{ data: txCounts, backgroundColor: PALETTE.slice(0, txLabels.length), hoverOffset: 6 }],
+        },
+        options: { ...baseOpts, plugins: { legend: { labels: { color: textColor, font: { size: 11 } } } } },
+      });
+    }
+  }
+
   // ── Cache helpers ─────────────────────────────────────────────────────────
   function getCacheKey() {
     const usidMatch = document.cookie.match(/(?:^|;\s*)usid=([^;]+)/);
@@ -588,6 +724,60 @@ html.dark .wn-adv-date-input { border-color: rgba(255,255,255,0.15); color-schem
   display: flex;
   flex-direction: column;
 }
+/* ── Tab bar ─────────────────────────────────────────────────────────────── */
+#wn-adv-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid rgba(0,0,0,0.08);
+  flex-shrink: 0;
+  background: rgba(0,0,0,0.01);
+}
+html.dark #wn-adv-tabs { border-bottom-color: rgba(255,255,255,0.08); background: rgba(255,255,255,0.01); }
+.wn-adv-tab {
+  padding: 8px 18px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  background: none;
+  color: inherit;
+  opacity: 0.45;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: opacity 0.12s;
+  font-family: inherit;
+}
+.wn-adv-tab:hover { opacity: 0.75; }
+.wn-adv-tab.wn-adv-tab-active { opacity: 1; border-bottom-color: #6c5ce7; }
+/* ── Charts panel ─────────────────────────────────────────────────────────── */
+#wn-adv-charts {
+  flex: 1;
+  overflow-y: auto;
+  display: none;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 20px;
+  padding: 20px;
+}
+#wn-adv-charts.wn-adv-charts-visible { display: flex; }
+.wn-adv-chart-card {
+  background: rgba(0,0,0,0.02);
+  border: 1px solid rgba(0,0,0,0.07);
+  border-radius: 8px;
+  padding: 16px 18px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+html.dark .wn-adv-chart-card { background: rgba(255,255,255,0.03); border-color: rgba(255,255,255,0.08); }
+.wn-adv-chart-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.5;
+}
+.wn-adv-chart-card canvas { display: block; }
 /* ── Loading / error states ─────────────────────────────────────────────── */
 #wn-adv-status {
   display: flex;
@@ -1260,6 +1450,53 @@ html.dark .wn-adv-order-link-btn:hover { color: #c8c0ff; }
       body.appendChild(sidebar);
       body.appendChild(main);
 
+      // Tab bar
+      const tabBar = document.createElement('div');
+      tabBar.id = 'wn-adv-tabs';
+      const tabOrders = document.createElement('button');
+      tabOrders.className = 'wn-adv-tab wn-adv-tab-active';
+      tabOrders.type = 'button'; tabOrders.textContent = 'Orders';
+      const tabCharts = document.createElement('button');
+      tabCharts.className = 'wn-adv-tab';
+      tabCharts.type = 'button'; tabCharts.textContent = 'Charts';
+      tabBar.appendChild(tabOrders);
+      tabBar.appendChild(tabCharts);
+      main.appendChild(tabBar);
+
+      // Grid container
+      const gridContainer = document.createElement('div');
+      gridContainer.id = 'wn-adv-grid-container';
+      gridContainer.style.cssText = 'flex:1;overflow:hidden;display:flex;flex-direction:column;';
+      main.appendChild(gridContainer);
+
+      // Charts panel
+      const chartsPanel = document.createElement('div');
+      chartsPanel.id = 'wn-adv-charts';
+      main.appendChild(chartsPanel);
+
+      let chartsBuilt = false;
+
+      function activateTab(tab) {
+        const isCharts = tab === tabCharts;
+        tabOrders.classList.toggle('wn-adv-tab-active', !isCharts);
+        tabCharts.classList.toggle('wn-adv-tab-active', isCharts);
+        gridContainer.style.display = isCharts ? 'none' : 'flex';
+        chartsPanel.classList.toggle('wn-adv-charts-visible', isCharts);
+        if (isCharts && !chartsBuilt) {
+          chartsPanel.innerHTML = '<div style="padding:20px;opacity:0.5">Loading Chart.js\u2026</div>';
+          loadChartJs().then(() => {
+            chartsPanel.innerHTML = '';
+            renderCharts(displayedRows || rows, chartsPanel);
+            chartsBuilt = true;
+          }).catch(() => {
+            chartsPanel.innerHTML = '<div style="padding:20px;opacity:0.5">Could not load Chart.js. Check your internet connection.</div>';
+          });
+        }
+      }
+
+      tabOrders.addEventListener('click', () => activateTab(tabOrders));
+      tabCharts.addEventListener('click', () => activateTab(tabCharts));
+
       function refresh() {
         displayedRows = applyFilters(rows);
         const total    = Math.max(0, rows.length - 1);
@@ -1269,12 +1506,19 @@ html.dark .wn-adv-order-link-btn:hover { color: #c8c0ff; }
           : `${filtered.toLocaleString()} of ${total.toLocaleString()} orders`;
         const ageStr = lastCacheTimestamp ? ` \u00b7 Updated ${formatCacheAge(lastCacheTimestamp)}` : ' \u00b7 (restored)';
         meta.textContent = countStr + ageStr;
+        // Rebuild charts if currently visible
+        if (chartsPanel.classList.contains('wn-adv-charts-visible') && window.Chart) {
+          chartsPanel.innerHTML = '';
+          renderCharts(displayedRows, chartsPanel);
+        } else {
+          chartsBuilt = false; // stale — will rebuild on next switch
+        }
         // If table already rendered, only swap data rows (skip thead rebuild + column analysis)
-        const existingWrap = main.querySelector('#wn-adv-table-wrap');
+        const existingWrap = gridContainer.querySelector('#wn-adv-table-wrap');
         if (existingWrap && existingWrap._updateRows) {
           existingWrap._updateRows(displayedRows.slice(1));
         } else {
-          renderGrid(displayedRows, main);
+          renderGrid(displayedRows, gridContainer);
         }
       }
 
