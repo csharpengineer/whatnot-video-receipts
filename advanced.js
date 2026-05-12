@@ -7,7 +7,7 @@
   const ADV_OVERLAY_ID    = 'wn-advanced-overlay';
   const ADV_FAKE_PATH     = '/wn-advanced-orders';
   const ADV_STYLE_ID      = 'wn-advanced-styles';
-  const CACHE_KEY_PREFIX  = 'wn_adv_gql_';
+  const CACHE_KEY_PREFIX  = 'wn_adv_gql2_';
   const CACHE_TTL_MS      = 15 * 60 * 1000; // 15 minutes
 
   // ── Build auth headers (same pattern as injected.js) ─────────────────────
@@ -59,7 +59,7 @@
         price { amount __typename }
         listing { title description
           category { label __typename }
-          user { username premierShopStatus { isPremierShop __typename } isVerifiedSeller __typename }
+          user { username profileImage { url __typename } premierShopStatus { isPremierShop __typename } isVerifiedSeller __typename }
           __typename
         }
         shipment { shippingServiceName trackingMetadata { title eta isDelayed isArrivingToday __typename } __typename }
@@ -113,7 +113,7 @@
   function gqlEdgesToRows(edges) {
     const headers = [
       'uuid', 'Order #', 'Date', 'Status', 'Sales Channel',
-      'Item', 'Description', 'Category', 'Seller', 'Premier Seller', 'Verified Seller',
+      'Item', 'Description', 'Category', 'Seller', 'Seller Avatar', 'Premier Seller', 'Verified Seller',
       'Qty', 'Item Price',
       'Subtotal', 'Shipping', 'Tax', 'Auth Fee', 'Credits', 'Total',
       'Shipping Service', 'ETA', 'Tracking',
@@ -141,6 +141,7 @@
         listing?.description       || '',
         listing?.category?.label   || '',
         seller?.username           || '',
+        seller?.profileImage?.url  || '',
         seller?.premierShopStatus?.isPremierShop ? 'Yes' : '',
         seller?.isVerifiedSeller                 ? 'Yes' : '',
         item?.quantity             ?? '',
@@ -397,6 +398,23 @@ html.dark #wn-adv-col-popover {
 }
 #wn-adv-col-popover input[type="checkbox"] { accent-color: #6c5ce7; cursor: pointer; }
 
+/* ── Seller cell ────────────────────────────────────────────────────────── */
+.wn-adv-seller-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: inherit;
+  text-decoration: none;
+}
+.wn-adv-seller-link:hover { text-decoration: underline; }
+.wn-adv-seller-avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  vertical-align: middle;
+}
 /* ── Order link column ───────────────────────────────────────────────────── */
 .wn-adv-link-cell { width: 28px; min-width: 28px; max-width: 28px; text-align: center; padding: 0 2px !important; }
 .wn-adv-link-btn {
@@ -422,7 +440,7 @@ tfoot .wn-adv-link-cell { font-size: 0.72rem; opacity: 0.65; text-align: left; w
   let sortState   = { col: -1, dir: 'asc' };
   let currentRows = null; // last loaded [headers, ...data]; used by export
   // Columns hidden by default (matched by lowercase header name)
-  const DEFAULT_HIDDEN = new Set(['uuid', 'description', 'premier seller', 'verified seller', 'auth fee']);
+  const DEFAULT_HIDDEN = new Set(['uuid', 'description', 'seller avatar', 'premier seller', 'verified seller', 'auth fee']);
   let hiddenCols = new Set(DEFAULT_HIDDEN); // indices updated each time headers are known
   let savedOverlayState = null; // { scrollTop } — set by goToOrder, consumed on back-navigate restore
 
@@ -554,6 +572,9 @@ tfoot .wn-adv-link-cell { font-size: 0.72rem; opacity: 0.65; text-align: left; w
       });
       const sorted = sortedRows();
       tbody.innerHTML = '';
+      // Precompute special column indices once per rebuild
+      const sellerCi = headers.indexOf('Seller');
+      const avatarCi = headers.indexOf('Seller Avatar');
       sorted.forEach(row => {
         const tr = document.createElement('tr');
         // Link icon cell (always visible)
@@ -571,8 +592,29 @@ tfoot .wn-adv-link-cell { font-size: 0.72rem; opacity: 0.65; text-align: left; w
         headers.forEach((_, ci) => {
           const td = document.createElement('td');
           td.dataset.ci = ci;
-          td.textContent = row[ci] ?? '';
-          td.title = row[ci] ?? '';
+          if (ci === sellerCi) {
+            // Render as avatar + linked username
+            const username = row[ci] || '';
+            const avatarUrl = avatarCi >= 0 ? (row[avatarCi] || '') : '';
+            const a = document.createElement('a');
+            a.href = `https://www.whatnot.com/user/${username}`;
+            a.target = '_blank';
+            a.rel = 'noopener noreferrer';
+            a.className = 'wn-adv-seller-link';
+            if (avatarUrl) {
+              const img = document.createElement('img');
+              img.src = avatarUrl;
+              img.className = 'wn-adv-seller-avatar';
+              img.alt = '';
+              a.appendChild(img);
+            }
+            a.appendChild(document.createTextNode(username));
+            td.appendChild(a);
+            td.title = username;
+          } else {
+            td.textContent = row[ci] ?? '';
+            td.title = String(row[ci] ?? '');
+          }
           if (isNumeric[ci]) td.style.textAlign = 'right';
           if (hiddenCols.has(ci)) td.style.display = 'none';
           tr.appendChild(td);
