@@ -783,6 +783,7 @@ html.dark .wn-adv-order-link-btn:hover { color: #c8c0ff; }
         }
       });
       const sorted = sortedRows();
+      const frag = document.createDocumentFragment();
       tbody.innerHTML = '';
       // Precompute special column indices once per rebuild
       const orderNumCi = headers.indexOf('Order #');
@@ -843,8 +844,9 @@ html.dark .wn-adv-order-link-btn:hover { color: #c8c0ff; }
           if (hiddenCols.has(ci)) td.style.display = 'none';
           tr.appendChild(td);
         });
-        tbody.appendChild(tr);
+        frag.appendChild(tr);
       });
+      tbody.replaceChildren(frag);
       // Update footer totals
       const totals = computeTotals(sorted);
       footTr.innerHTML = '';
@@ -874,6 +876,11 @@ html.dark .wn-adv-order-link-btn:hover { color: #c8c0ff; }
     };
     wrap._headers    = headers;
     wrap._hiddenCols = () => hiddenCols;
+    // Fast update: swap data rows and rebuild tbody+footer without touching thead
+    wrap._updateRows = (newDataRows) => {
+      dataRows = newDataRows;
+      rebuildBody();
+    };
 
     container.innerHTML = '';
     container.appendChild(wrap);
@@ -1021,7 +1028,13 @@ html.dark .wn-adv-order-link-btn:hover { color: #c8c0ff; }
           : `${filtered.toLocaleString()} of ${total.toLocaleString()} orders`;
         const ageStr = lastCacheTimestamp ? ` \u00b7 Updated ${formatCacheAge(lastCacheTimestamp)}` : ' \u00b7 (restored)';
         meta.textContent = countStr + ageStr;
-        renderGrid(displayedRows, main);
+        // If table already rendered, only swap data rows (skip thead rebuild + column analysis)
+        const existingWrap = main.querySelector('#wn-adv-table-wrap');
+        if (existingWrap && existingWrap._updateRows) {
+          existingWrap._updateRows(displayedRows.slice(1));
+        } else {
+          renderGrid(displayedRows, main);
+        }
       }
 
       buildSidebar(rows, sidebar, refresh);
