@@ -191,11 +191,20 @@
     const statusCi = headers.indexOf('Status');
     const catCi    = headers.indexOf('Category');
     const sellerCi = headers.indexOf('Seller');
+    const q = searchQuery.trim().toLowerCase();
     const data = rows.slice(1).filter(row => {
       if (activeFilters.channel.size  > 0 && !activeFilters.channel.has(String(row[chanCi]   ?? ''))) return false;
       if (activeFilters.status.size   > 0 && !activeFilters.status.has(String(row[statusCi]  ?? ''))) return false;
       if (activeFilters.category.size > 0 && !activeFilters.category.has(String(row[catCi]   ?? ''))) return false;
       if (activeFilters.seller.size   > 0 && !activeFilters.seller.has(String(row[sellerCi]  ?? ''))) return false;
+      if (q) {
+        // Check all columns that are not hidden for a match
+        const anyMatch = row.some((val, ci) => {
+          if (hiddenCols.has(ci)) return false;
+          return String(val ?? '').toLowerCase().includes(q);
+        });
+        if (!anyMatch) return false;
+      }
       return true;
     });
     return [headers, ...data];
@@ -556,6 +565,24 @@ html.dark #wn-adv-table tfoot td { border-top-color: rgba(255,255,255,0.1); back
   background: rgba(0,0,0,0.02);
 }
 html.dark #wn-adv-toolbar { border-bottom-color: rgba(255,255,255,0.08); background: rgba(255,255,255,0.02); }
+#wn-adv-search {
+  flex: 1;
+  min-width: 120px;
+  max-width: 380px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(0,0,0,0.15);
+  background: transparent;
+  color: inherit;
+  font-size: 0.82rem;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+html.dark #wn-adv-search { border-color: rgba(255,255,255,0.15); }
+#wn-adv-search:focus { outline: none; border-color: #6c5ce7; box-shadow: 0 0 0 2px rgba(108,92,231,0.18); }
+#wn-adv-search:disabled { opacity: 0.4; cursor: not-allowed; }
+.wn-adv-highlight { background: #ffe066; color: #1a1a1a; border-radius: 2px; padding: 0 1px; }
+html.dark .wn-adv-highlight { background: #b8860b; color: #fff; }
 .wn-adv-tb-btn {
   display: inline-flex;
   align-items: center;
@@ -662,6 +689,7 @@ html.dark .wn-adv-order-link-btn:hover { color: #c8c0ff; }
   let hiddenCols        = new Set(DEFAULT_HIDDEN);
   let savedOverlayState = null; // { scrollTop } — set by goToOrder, consumed on back-navigate restore
   let activeFilters     = { channel: new Set(), status: new Set(), category: new Set(), seller: new Set() };
+  let searchQuery       = ''; // free-text search across all visible columns
 
   // ── Render the parsed CSV rows into the overlay body ──────────────────────
   function renderGrid(rows, container) {
@@ -774,6 +802,22 @@ html.dark .wn-adv-order-link-btn:hover { color: #c8c0ff; }
 
     // Build a single data row element
     function makeRow(row) {
+      const q = searchQuery.trim().toLowerCase();
+      // Helper: wrap matched substring in a highlight span
+      function highlighted(text) {
+        const s = String(text ?? '');
+        if (!q) return document.createTextNode(s);
+        const idx = s.toLowerCase().indexOf(q);
+        if (idx < 0) return document.createTextNode(s);
+        const frag = document.createDocumentFragment();
+        frag.appendChild(document.createTextNode(s.slice(0, idx)));
+        const mark = document.createElement('mark');
+        mark.className = 'wn-adv-highlight';
+        mark.textContent = s.slice(idx, idx + q.length);
+        frag.appendChild(mark);
+        frag.appendChild(document.createTextNode(s.slice(idx + q.length)));
+        return frag;
+      }
       const tr = document.createElement('tr');
       const orderId = row[0]; // uuid always col 0
       headers.forEach((h, ci) => {
@@ -817,7 +861,7 @@ html.dark .wn-adv-order-link-btn:hover { color: #c8c0ff; }
           td.appendChild(a);
           td.title = username;
         } else {
-          td.textContent = row[ci] ?? '';
+          td.appendChild(highlighted(row[ci]));
           td.title = String(row[ci] ?? '');
         }
         if (isNumeric[ci]) td.style.textAlign = 'right';
@@ -991,6 +1035,7 @@ html.dark .wn-adv-order-link-btn:hover { color: #c8c0ff; }
       </div>
       <div id="wn-adv-toolbar">
         <button id="wn-adv-btn-reload" class="wn-adv-tb-btn" type="button">${reloadSvg} Reload Orders</button>
+        <input id="wn-adv-search" type="search" placeholder="Search orders…" autocomplete="off" spellcheck="false" disabled />
         <button id="wn-adv-btn-export" class="wn-adv-tb-btn" type="button" disabled>${exportSvg} Export CSV</button>
         <button id="wn-adv-btn-cols"   class="wn-adv-tb-btn" type="button" disabled>${columnsSvg} Columns</button>
       </div>
@@ -1009,6 +1054,28 @@ html.dark .wn-adv-order-link-btn:hover { color: #c8c0ff; }
     const reloadBtn = overlay.querySelector('#wn-adv-btn-reload');
     const exportBtn = overlay.querySelector('#wn-adv-btn-export');
     const colsBtn   = overlay.querySelector('#wn-adv-btn-cols');
+    const searchEl  = overlay.querySelector('#wn-adv-search');
+
+    // Debounced search
+    let searchDebounce = null;
+    searchEl.addEventListener('input', () => {
+      clearTimeout(searchDebounce);
+      searchDebounce = setTimeout(() => {
+        searchQuery = searchEl.value;
+        const wrapEl = document.getElementById('wn-adv-table-wrap');
+        if (wrapEl && wrapEl._updateRows && currentRows) {
+          displayedRows = applyFilters(currentRows);
+          const total    = Math.max(0, currentRows.length - 1);
+          const filtered = Math.max(0, displayedRows.length - 1);
+          const countStr = filtered === total
+            ? `${total.toLocaleString()} order${total !== 1 ? 's' : ''}`
+            : `${filtered.toLocaleString()} of ${total.toLocaleString()} orders`;
+          meta.textContent = countStr + (lastCacheTimestamp ? ` \u00b7 Updated ${formatCacheAge(lastCacheTimestamp)}` : ' \u00b7 (restored)');
+          wrapEl._updateRows(displayedRows.slice(1));
+        }
+      }, 150);
+    });
+    searchEl.addEventListener('keydown', (e) => { if (e.key === 'Escape') { searchEl.value = ''; searchEl.dispatchEvent(new Event('input')); } });
 
     document.getElementById('wn-adv-back').addEventListener('click', closeAdvancedOrders);
     exportBtn.addEventListener('click', exportCurrentGrid);
@@ -1045,6 +1112,8 @@ html.dark .wn-adv-order-link-btn:hover { color: #c8c0ff; }
         showGrid(rows);
         exportBtn.disabled = false;
         colsBtn.disabled   = false;
+        searchEl.disabled  = false;
+        searchEl.focus();
       } catch (err) {
         body.innerHTML = `
           <div id="wn-adv-status">
@@ -1097,6 +1166,7 @@ html.dark .wn-adv-order-link-btn:hover { color: #c8c0ff; }
       currentRows = preloadedRows;
       exportBtn.disabled = false;
       colsBtn.disabled   = false;
+      searchEl.disabled  = false;
       showGrid(preloadedRows, restoreScrollTop);
     } else {
       loadOrders(false);
@@ -1115,6 +1185,7 @@ html.dark .wn-adv-order-link-btn:hover { color: #c8c0ff; }
     currentRows   = null;
     displayedRows = null;
     activeFilters = { channel: new Set(), status: new Set(), category: new Set(), seller: new Set() };
+    searchQuery   = '';
     // If URL is still the fake path, navigate back
     if (window.location.pathname === ADV_FAKE_PATH) {
       history.back();
