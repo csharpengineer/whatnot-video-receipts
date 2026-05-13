@@ -867,13 +867,13 @@ html.dark #wn-adv-table tfoot tr { background: #111; }
   padding: 8px 12px;
   font-weight: 700;
   border-top: 2px solid rgba(0,0,0,0.1);
-  background: inherit;
+  background: #fff;
   white-space: nowrap;
   position: sticky;
   bottom: 0;
   z-index: 100;
 }
-html.dark #wn-adv-table tfoot td { border-top-color: rgba(255,255,255,0.1); }
+html.dark #wn-adv-table tfoot td { border-top-color: rgba(255,255,255,0.1); background: #111; }
 
 /* ── Toolbar ────────────────────────────────────────────────────────────── */
 #wn-adv-toolbar {
