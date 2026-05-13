@@ -1449,13 +1449,10 @@ html.dark .wn-adv-order-link-btn:hover { color: #c8c0ff; }
     overlay.appendChild(imgPreview);
 
     function hoverTarget(e) {
-      // Item text span → use the thumbnail from the same cell
-      const textSpan = e.target.closest('.wn-adv-item-text');
-      if (textSpan) {
-        const thumb = textSpan.closest('.wn-adv-item-cell')?.querySelector('.wn-adv-item-thumb:not(.wn-adv-item-thumb-empty)');
-        return thumb || null;
-      }
-      // Seller avatar
+      // Item thumbnail (not empty placeholder) → show preview
+      const thumb = e.target.closest('.wn-adv-item-thumb');
+      if (thumb && !thumb.classList.contains('wn-adv-item-thumb-empty')) return thumb;
+      // Seller avatar → show preview
       return e.target.closest('.wn-adv-seller-avatar');
     }
     overlay.addEventListener('mouseover', (e) => {
@@ -1465,10 +1462,9 @@ html.dark .wn-adv-order-link-btn:hover { color: #c8c0ff; }
       imgPreview.style.display = 'block';
     });
     overlay.addEventListener('mouseout', (e) => {
-      // Hide when leaving text span or avatar
-      const textSpan = e.target.closest('.wn-adv-item-text');
-      const avatar   = e.target.closest('.wn-adv-seller-avatar');
-      if (!textSpan && !avatar) return;
+      const thumb  = e.target.closest('.wn-adv-item-thumb');
+      const avatar = e.target.closest('.wn-adv-seller-avatar');
+      if (!thumb && !avatar) return;
       imgPreview.style.display = 'none';
     });
     overlay.addEventListener('mousemove', (e) => {
