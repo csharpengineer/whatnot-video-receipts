@@ -7,7 +7,7 @@
   const ADV_OVERLAY_ID    = 'wn-advanced-overlay';
   const ADV_FAKE_PATH     = '/wn-advanced-orders';
   const ADV_STYLE_ID      = 'wn-advanced-styles';
-  const CACHE_KEY_PREFIX  = 'wn_adv_gql2_';
+  const CACHE_KEY_PREFIX  = 'wn_adv_gql3_';
   const CACHE_TTL_MS      = 15 * 60 * 1000; // 15 minutes
 
   // ── Build auth headers (same pattern as injected.js) ─────────────────────
