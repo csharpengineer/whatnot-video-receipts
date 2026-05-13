@@ -1030,8 +1030,210 @@ html.dark .wn-adv-order-link-btn:hover { color: #c8c0ff; }
   margin-left: auto;
   margin-right: 8px;
 }
+/* ── Play button column ─────────────────────────────────────────────────── */
+.wn-adv-play-th {
+  width: 28px;
+  min-width: 28px;
+  padding: 0 4px !important;
+  text-align: center;
+}
+.wn-adv-play-td {
+  padding: 0 4px !important;
+  text-align: center;
+  width: 28px;
+}
+.wn-adv-play-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #6c5ce7;
+  padding: 2px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+  opacity: 0.7;
+  transition: opacity 0.15s, color 0.15s;
+}
+.wn-adv-play-btn:hover { opacity: 1; color: #4f3ed0; }
+html.dark .wn-adv-play-btn { color: #a29bfe; }
+html.dark .wn-adv-play-btn:hover { color: #c8c0ff; }
+/* ── Video receipt player overlay ───────────────────────────────────────── */
+#wn-adv-player-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1000020;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#wn-adv-player-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.8);
+}
+#wn-adv-player-panel {
+  position: relative;
+  z-index: 1;
+  background: #1a1a1a;
+  color: #f0f0f0;
+  border-radius: 12px;
+  width: min(920px, 95vw);
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 20px 64px rgba(0,0,0,0.6);
+}
+#wn-adv-player-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  flex-shrink: 0;
+}
+#wn-adv-player-title {
+  font-weight: 600;
+  font-size: 0.92rem;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#wn-adv-player-btns {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+#wn-adv-player-btns button {
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.15);
+  color: #f0f0f0;
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+  font-size: 0.78rem;
+  white-space: nowrap;
+  transition: background 0.12s;
+}
+#wn-adv-player-btns button:hover { background: rgba(255,255,255,0.2); }
+#wn-adv-player-btns button:disabled { opacity: 0.35; cursor: not-allowed; }
+#wn-adv-player-video {
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  background: #000;
+  display: block;
+}
+#wn-adv-player-info {
+  padding: 7px 14px;
+  font-size: 0.76rem;
+  opacity: 0.6;
+  text-align: center;
+  flex-shrink: 0;
+}
     `.trim();
     (document.head || document.documentElement).appendChild(style);
+  }
+
+  // ── Ensure injected.js (MAIN-world HLS player) is loaded ─────────────────
+  function ensureInjected() {
+    if (window.__wn_ext_loaded) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      const injectScript = (src, cb) => {
+        const s = document.createElement('script');
+        s.src = chrome.runtime.getURL(src);
+        s.onload = () => { s.remove(); cb(); };
+        s.onerror = () => reject(new Error('Failed to load ' + src));
+        (document.head || document.documentElement).appendChild(s);
+      };
+      injectScript('hls.min.js', () => injectScript('injected.js', resolve));
+    });
+  }
+
+  // ── Module-level IPC state for video player ───────────────────────────────
+  const _advPendingResolvers = {};
+  window.addEventListener('__whatnot_ext_response__', (evt) => {
+    const { requestId, ...payload } = evt.detail;
+    if (_advPendingResolvers[requestId]) {
+      _advPendingResolvers[requestId](payload);
+      delete _advPendingResolvers[requestId];
+    }
+  });
+
+  function _requestVideoReceipt(orderUuid) {
+    return new Promise((resolve) => {
+      const requestId = 'adv-' + Math.random().toString(36).slice(2);
+      _advPendingResolvers[requestId] = resolve;
+      window.dispatchEvent(new CustomEvent('__whatnot_ext_request__', {
+        detail: { orderUuid, requestId },
+      }));
+    });
+  }
+
+  function _formatTime(seconds) {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = Math.floor(seconds % 60);
+    if (h > 0) return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    return `${m}:${String(s).padStart(2,'0')}`;
+  }
+
+  function openAdvPlayer({ indexUrl, timeOffset, countdown, mp4BaseUrl, sellerUsername, itemTitle }) {
+    document.getElementById('wn-adv-player-overlay')?.remove();
+    const overlay = document.getElementById('wn-advanced-overlay');
+    if (!overlay) return;
+
+    const saleTime = timeOffset + (countdown || 0);
+
+    const playerEl = document.createElement('div');
+    playerEl.id = 'wn-adv-player-overlay';
+    playerEl.setAttribute('role', 'dialog');
+    playerEl.setAttribute('aria-modal', 'true');
+    playerEl.innerHTML = `
+      <div id="wn-adv-player-backdrop"></div>
+      <div id="wn-adv-player-panel">
+        <div id="wn-adv-player-header">
+          <span id="wn-adv-player-title">${itemTitle ? itemTitle + ' — Video Receipt' : 'Video Receipt'}</span>
+          <div id="wn-adv-player-btns">
+            <button id="wn-adv-pbtn-sale" title="Jump to sale moment">⚡ Sale moment</button>
+            <button id="wn-adv-pbtn-start" title="Watch from beginning">⏮ From start</button>
+            <button id="wn-adv-pbtn-close" title="Close" aria-label="Close">✕ Close</button>
+          </div>
+        </div>
+        <video id="wn-video" controls playsinline></video>
+        <div id="wn-adv-player-info">
+          Opening 30 s before your item was sold
+          &nbsp;·&nbsp;
+          Sale at <strong>${_formatTime(saleTime)}</strong> into the stream
+        </div>
+      </div>`;
+    overlay.appendChild(playerEl);
+
+    window.dispatchEvent(new CustomEvent('__whatnot_ext_play__', {
+      detail: { indexUrl, timeOffset, saleTime }
+    }));
+
+    playerEl.querySelector('#wn-adv-pbtn-sale').addEventListener('click', () => {
+      window.dispatchEvent(new CustomEvent('__whatnot_ext_seek__', { detail: { time: saleTime } }));
+    });
+    playerEl.querySelector('#wn-adv-pbtn-start').addEventListener('click', () => {
+      window.dispatchEvent(new CustomEvent('__whatnot_ext_seek__', { detail: { time: 0 } }));
+    });
+    playerEl.querySelector('#wn-adv-pbtn-close').addEventListener('click', closeAdvPlayer);
+    playerEl.querySelector('#wn-adv-player-backdrop').addEventListener('click', closeAdvPlayer);
+  }
+
+  function closeAdvPlayer() {
+    const el = document.getElementById('wn-adv-player-overlay');
+    if (el) {
+      window.dispatchEvent(new CustomEvent('__whatnot_ext_destroy__'));
+      el.remove();
+    }
   }
 
   // ── Persistent state ─────────────────────────────────────────────────────
@@ -1126,7 +1328,7 @@ html.dark .wn-adv-order-link-btn:hover { color: #c8c0ff; }
     const sellerCi    = headers.indexOf('Seller');
     const avatarCi    = headers.indexOf('Seller Avatar');
     const premierCi   = headers.indexOf('Premier Seller');
-    const colCount   = headers.length;
+    const colCount   = headers.length + 1; // +1 for fixed play button column
     const WINGS_SVG  = `<svg fill="none" viewBox="0 0 38 38" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%"><path d="M32.3776 12.1644C31.1032 13.437 31.0795 14.6153 31.4769 16.2019C31.6705 17.0997 31.7725 18.0316 31.7725 18.9872C31.7725 19.7721 31.7037 20.541 31.572 21.2881C31.4939 21.7292 31.3942 22.162 31.2738 22.586C30.3229 25.9369 28.0778 28.744 25.1106 30.4356C24.7941 30.6159 24.6841 31.0184 24.8647 31.3342C24.9694 31.517 25.1482 31.6309 25.342 31.6594C25.483 31.6801 25.6317 31.6557 25.7649 31.5796C26.6107 31.0973 27.4034 30.5326 28.1317 29.8962C29.1625 30.6969 30.7017 31.4334 32.1067 31.0127C33.4494 30.6534 34.2498 29.6602 34.874 28.4751C35.0252 28.188 34.9348 27.8316 34.6681 27.6635C33.5414 26.9535 32.4039 26.4592 31.0569 26.8196C30.9412 26.8504 30.8296 26.8861 30.7218 26.9261C31.2702 26.0917 31.7346 25.1972 32.1031 24.2547C33.3321 24.2784 34.4668 24.0942 35.3868 23.1759C36.3697 22.1944 36.5655 20.9348 36.5125 19.5968C36.4998 19.2726 36.2429 19.0091 35.9277 18.9967C34.8974 18.9561 33.9259 19.0307 33.0822 19.523C33.0886 19.3452 33.0919 19.1666 33.0919 18.9872C33.0919 18.081 33.0087 17.1943 32.8492 16.3341C33.7903 16.2673 34.6562 16.001 35.3868 15.2717C36.3697 14.2903 36.5655 13.0307 36.5125 11.6926C36.4998 11.3684 36.2429 11.105 35.9277 11.0926C34.5964 11.0401 33.3638 11.1798 32.3776 12.1644Z" fill="url(#advwng0)"/><path d="M5.62045 12.1644C6.8948 13.437 6.91851 14.6153 6.52113 16.2019C6.32759 17.0997 6.22554 18.0316 6.22554 18.9872C6.22554 19.7721 6.29435 20.541 6.42604 21.2881C6.50412 21.7292 6.60385 22.162 6.7242 22.586C7.67513 25.9369 9.92025 28.744 12.8874 30.4356C13.2039 30.6159 13.3139 31.0184 13.1333 31.3342C13.0287 31.517 12.8498 31.6309 12.656 31.6594C12.515 31.6801 12.3664 31.6557 12.2331 31.5796C11.3874 31.0973 10.5947 30.5326 9.86639 29.8962C8.83557 30.6969 7.2963 31.4334 5.8913 31.0127C4.54866 30.6534 3.74823 29.6602 3.12408 28.4751C2.9728 28.188 3.06326 27.8316 3.32998 27.6635C4.45666 26.9535 5.59417 26.4592 6.94119 26.8196C7.0569 26.8504 7.16848 26.8861 7.2762 26.9261C6.72781 26.0917 6.26343 25.1972 5.89491 24.2547C4.66592 24.2784 3.53125 24.0942 2.61125 23.1759C1.62836 22.1944 1.43251 20.9348 1.48559 19.5968C1.49822 19.2726 1.75515 19.0091 2.07032 18.9967C3.10063 18.9561 4.07217 19.0307 4.91589 19.523C4.90945 19.3452 4.9061 19.1666 4.9061 18.9872C4.9061 18.081 4.98934 17.1943 5.14886 16.3341C4.20772 16.2673 3.34184 16.001 2.61125 15.2717C1.62836 14.2903 1.43251 13.0307 1.48559 11.6926C1.49822 11.3684 1.75515 11.105 2.07032 11.0926C3.40162 11.0401 4.63422 11.1798 5.62045 12.1644Z" fill="url(#advwng1)"/><defs><linearGradient id="advwng0" x1="30.7666" x2="30.7666" y1="0.4" y2="30.93" gradientUnits="userSpaceOnUse"><stop offset="0.255" stop-color="#F0D400"/><stop offset="1" stop-color="#E39601"/></linearGradient><linearGradient id="advwng1" x1="7.231" x2="7.231" y1="0.4" y2="30.93" gradientUnits="userSpaceOnUse"><stop offset="0.255" stop-color="#F0D400"/><stop offset="1" stop-color="#E39601"/></linearGradient></defs></svg>`;
 
     const wrap = document.createElement('div');
@@ -1135,9 +1337,16 @@ html.dark .wn-adv-order-link-btn:hover { color: #c8c0ff; }
     const table = document.createElement('table');
     table.id = 'wn-adv-table';
 
+    const PLAY_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" role="presentation"><path d="M8 5v14l11-7z"/></svg>`;
+
     // ── thead ──
     const thead = document.createElement('thead');
     const headerTr = document.createElement('tr');
+    // Fixed play-button column (always visible, not sortable)
+    const playTh = document.createElement('th');
+    playTh.className = 'wn-adv-play-th';
+    playTh.title = 'Video receipt';
+    headerTr.appendChild(playTh);
     headers.forEach((h, ci) => {
       const th = document.createElement('th');
       th.dataset.ci = ci;
@@ -1187,6 +1396,32 @@ html.dark .wn-adv-order-link-btn:hover { color: #c8c0ff; }
       }
       const tr = document.createElement('tr');
       const orderId = row[0]; // uuid always col 0
+      // Play button cell (always first)
+      const playTd = document.createElement('td');
+      playTd.className = 'wn-adv-play-td';
+      const playBtn = document.createElement('button');
+      playBtn.className = 'wn-adv-play-btn';
+      playBtn.type = 'button';
+      playBtn.title = 'Watch video receipt';
+      playBtn.innerHTML = PLAY_SVG;
+      playBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        playBtn.disabled = true;
+        playBtn.style.opacity = '0.4';
+        try {
+          await ensureInjected();
+          const result = await _requestVideoReceipt(orderId);
+          if (result.error) { alert('Video receipt: ' + result.error); return; }
+          openAdvPlayer(result);
+        } catch (err) {
+          alert('Could not load video receipt: ' + (err.message || err));
+        } finally {
+          playBtn.disabled = false;
+          playBtn.style.opacity = '';
+        }
+      });
+      playTd.appendChild(playBtn);
+      tr.appendChild(playTd);
       headers.forEach((h, ci) => {
         const td = document.createElement('td');
         td.dataset.ci = ci;
@@ -1306,6 +1541,8 @@ html.dark .wn-adv-order-link-btn:hover { color: #c8c0ff; }
     function updateFooter(rowset) {
       const totals = computeTotals(rowset);
       footTr.innerHTML = '';
+      // Empty cell for the fixed play column
+      footTr.appendChild(document.createElement('td'));
       totals.forEach((v, ci) => {
         const td = document.createElement('td');
         td.dataset.ci = ci;
