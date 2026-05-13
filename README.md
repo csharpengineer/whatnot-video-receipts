@@ -2,13 +2,17 @@
 
 Whatnot Video Receipt transforms your Whatnot shopping experience with three powerful enhancements: watch the exact moment your item sold, get richer details on every order page, and explore your complete purchase history in a powerful filterable grid — all without leaving Whatnot.
 
-**This is available for installation from the Chrome Web Store: ▶️ https://chromewebstore.google.com/detail/whatnot-video-receipt/pkhnhhnkccohcebmhmedeakmgfpdmnkd?hl=en-US
+>**This is available for installation from the Chrome Web Store:
+>
+>   ▶️ https://chromewebstore.google.com/detail/whatnot-video-receipt/pkhnhhnkccohcebmhmedeakmgfpdmnkd?hl=en-US**
+>
+>
+>Find this extension useful?  Buy me a cookie!
+>
+>   🍪 https://buymeacoffee.com/psikic
 
-⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐
-🍪 Find this extension useful?  Buy me a cookie! 🍪
-       https://buymeacoffee.com/psikic
-⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐
-
+\
+\
 ▶️ VIDEO RECEIPT PLAYER
 
 Ever wonder what the bidding looked like when you won that item? The Video Receipt feature lets you watch the exact livestream moment your item was sold, right on the order detail page.
