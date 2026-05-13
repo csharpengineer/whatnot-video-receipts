@@ -278,6 +278,28 @@
     // Cancel any observers still waiting from a previous order page
     _cancelMetaObservers();
 
+    // ── Update video receipt button availability ──────────────────────────
+    const btn = document.getElementById(BTN_ID);
+    if (btn) {
+      const ageMs      = createdAt ? (Date.now() - new Date(createdAt).getTime()) : 0;
+      const expired    = createdAt && ageMs > 60 * 24 * 60 * 60 * 1000;
+      const notLive    = salesChannel && salesChannel !== 'LIVESTREAM';
+      const label      = btn.querySelector('#wn-btn-label');
+      if (expired || notLive) {
+        btn.disabled = true;
+        btn.style.opacity = '0.45';
+        btn.style.cursor = 'default';
+        if (label) label.textContent = expired
+          ? 'Video receipt expired (60-day limit)'
+          : 'Video receipt not available for this sales channel';
+      } else {
+        btn.disabled = false;
+        btn.style.opacity = '';
+        btn.style.cursor = '';
+        if (label) label.textContent = 'Watch video receipt';
+      }
+    }
+
     // ── Update Order Date to include time with seconds ────────────────────
     const d = new Date(createdAt);
     if (!isNaN(d)) {
