@@ -1455,10 +1455,12 @@ html.dark .wn-adv-order-link-btn:hover { color: #c8c0ff; }
       tabBar.id = 'wn-adv-tabs';
       const tabOrders = document.createElement('button');
       tabOrders.className = 'wn-adv-tab wn-adv-tab-active';
-      tabOrders.type = 'button'; tabOrders.textContent = 'Orders';
+      tabOrders.type = 'button';
+      tabOrders.innerHTML = '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" style="vertical-align:middle;margin-right:5px;flex-shrink:0"><rect x="1" y="1" width="6" height="6" rx="1" fill="#4f8ef7"/><rect x="9" y="1" width="6" height="6" rx="1" fill="#4f8ef7"/><rect x="1" y="9" width="6" height="6" rx="1" fill="#4f8ef7"/><rect x="9" y="9" width="6" height="6" rx="1" fill="#4f8ef7"/></svg>Orders';
       const tabCharts = document.createElement('button');
       tabCharts.className = 'wn-adv-tab';
-      tabCharts.type = 'button'; tabCharts.textContent = 'Charts';
+      tabCharts.type = 'button';
+      tabCharts.innerHTML = '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" style="vertical-align:middle;margin-right:5px;flex-shrink:0"><rect x="1" y="7" width="4" height="8" rx="1" fill="#a78bfa"/><rect x="6" y="4" width="4" height="11" rx="1" fill="#a78bfa"/><rect x="11" y="1" width="4" height="14" rx="1" fill="#a78bfa"/></svg>Charts';
       tabBar.appendChild(tabOrders);
       tabBar.appendChild(tabCharts);
       main.appendChild(tabBar);
