@@ -163,17 +163,19 @@
 
   // ── Chart.js loader (singleton) ───────────────────────────────────────────────────────
   let _chartJsPromise = null;
+  let _Chart = null;
   function loadChartJs() {
     if (_chartJsPromise) return _chartJsPromise;
-    if (window.Chart) { _chartJsPromise = Promise.resolve(window.Chart); return _chartJsPromise; }
+    if (_Chart) { _chartJsPromise = Promise.resolve(_Chart); return _chartJsPromise; }
     _chartJsPromise = fetch(chrome.runtime.getURL('chart.umd.min.js'))
       .then(r => r.text())
       .then(code => {
-        // Execute in content script context (bypasses page CSP which blocks <script> tags)
+        // new Function runs in the isolated world's global scope (not the page window).
+        // Append a return statement to capture the Chart constructor directly.
         // eslint-disable-next-line no-new-func
-        (new Function(code))();
-        if (!window.Chart) throw new Error('Chart not defined after load');
-        return window.Chart;
+        _Chart = new Function(code + '; return typeof Chart !== "undefined" ? Chart : null;')();
+        if (!_Chart) throw new Error('Chart not defined after load');
+        return _Chart;
       });
     return _chartJsPromise;
   }
@@ -244,7 +246,7 @@
       return canvas;
     }
 
-    const Chart = window.Chart;
+    const Chart = _Chart;
     const baseOpts = {
       animation: false,
       plugins: { legend: { labels: { color: textColor, font: { size: 11 } } } },
@@ -1514,7 +1516,7 @@ html.dark .wn-adv-order-link-btn:hover { color: #c8c0ff; }
         const ageStr = lastCacheTimestamp ? ` \u00b7 Updated ${formatCacheAge(lastCacheTimestamp)}` : ' \u00b7 (restored)';
         meta.textContent = countStr + ageStr;
         // Rebuild charts if currently visible
-        if (chartsPanel.classList.contains('wn-adv-charts-visible') && window.Chart) {
+        if (chartsPanel.classList.contains('wn-adv-charts-visible') && _Chart) {
           chartsPanel.innerHTML = '';
           renderCharts(displayedRows, chartsPanel);
         } else {
