@@ -58,6 +58,7 @@
         quantity
         price { amount __typename }
         listing { title description transactionType
+          images { url __typename }
           category { label __typename }
           user { username profileImage { url __typename } premierShopStatus { isPremierShop __typename } isVerifiedSeller __typename }
           __typename
@@ -139,7 +140,7 @@
         fmtChan(node.salesChannel),
         listing?.transactionType   || '',
         listing?.title             || '',
-        '',
+        listing?.images?.[0]?.url  || '',
         listing?.description       || '',
         listing?.category?.label   || '',
         seller?.username           || '',
