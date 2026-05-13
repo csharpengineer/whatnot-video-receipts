@@ -11,7 +11,14 @@
     if (init && typeof init.body === 'string') {
       try {
         var b = JSON.parse(init.body);
-        if (b.operationName === 'GetMyPurchases' && b.query &&
+        if (b.operationName === 'GetMyOrder' && b.query &&
+            !b.query.includes(' description')) {
+          // Inject description into inline listing{} selections and ListingNode fragment definitions
+          b.query = b.query
+            .replace(/(fragment\s+\w+\s+on\s+ListingNode\s*\{)/g, '$1 description ')
+            .replace(/\blisting\s*\{(?![^}]*description)/g, 'listing{ description ');
+          modInit = Object.assign({}, init, { body: JSON.stringify(b) });
+        } else if (b.operationName === 'GetMyPurchases' && b.query &&
             !b.query.includes('shipment{')) {
           isTarget = true;
           // Add user{...} + profileImage + premierShopStatus to every listing selection
