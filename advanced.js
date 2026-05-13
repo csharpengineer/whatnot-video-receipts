@@ -983,9 +983,10 @@ html.dark #wn-adv-col-popover {
 .wn-adv-item-thumb {
   width: 20px;
   height: 20px;
-  border-radius: 3px;
+  border-radius: 4px;
   object-fit: cover;
   flex-shrink: 0;
+  display: block;
 }
 /* ── Order # link cell ────────────────────────────────────────────────── */
 .wn-adv-order-link-btn {
