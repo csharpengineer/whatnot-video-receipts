@@ -1528,10 +1528,15 @@ html.dark .wn-adv-play-btn:hover { color: #c8c0ff; }
         } else if (ci === trackingNumCi) {
           const code    = row[ci] || '';
           const svcName = shippingSvcCi >= 0 ? (row[shippingSvcCi] || '') : '';
-          const isUsps  = svcName.toLowerCase().includes('usps') || /^\d{20,22}$/.test(code) || /^9[2-4]\d{18,20}$/.test(code);
-          if (code && isUsps) {
+          const svcLower = svcName.toLowerCase();
+          const isUsps  = svcLower.includes('usps') || /^9[2-4]\d{18,20}$/.test(code) || /^\d{20,22}$/.test(code);
+          const isUps   = svcLower.includes('ups')  || /^1Z[A-Z0-9]{16}$/i.test(code);
+          let trackingUrl = null;
+          if (code && isUsps) trackingUrl = `https://tools.usps.com/go/TrackConfirmAction?tLabels=${encodeURIComponent(code)}`;
+          else if (code && isUps) trackingUrl = `https://www.ups.com/track?tracknum=${encodeURIComponent(code)}`;
+          if (trackingUrl) {
             const a = document.createElement('a');
-            a.href = `https://tools.usps.com/go/TrackConfirmAction?tLabels=${encodeURIComponent(code)}`;
+            a.href = trackingUrl;
             a.target = '_blank';
             a.rel = 'noopener noreferrer';
             a.textContent = code;
