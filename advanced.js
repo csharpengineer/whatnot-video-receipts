@@ -659,6 +659,14 @@ html.dark .wn-adv-filter-section { border-bottom-color: rgba(255,255,255,0.06); 
   font-size: 0.8rem;
   cursor: pointer;
   user-select: none;
+  min-width: 0;
+}
+.wn-adv-filter-item span:not(.wn-adv-filter-count) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1;
 }
 .wn-adv-filter-item:hover { background: rgba(0,0,0,0.04); }
 html.dark .wn-adv-filter-item:hover { background: rgba(255,255,255,0.05); }
@@ -849,17 +857,23 @@ html.dark #wn-adv-table th:hover { background: rgba(255,255,255,0.05); }
 html.dark #wn-adv-table td { border-bottom-color: rgba(255,255,255,0.05); }
 #wn-adv-table tbody tr:hover { background: rgba(0,0,0,0.03); }
 html.dark #wn-adv-table tbody tr:hover { background: rgba(255,255,255,0.04); }
+#wn-adv-table tfoot,
+#wn-adv-table tfoot tr {
+  background: #fff;
+}
+html.dark #wn-adv-table tfoot,
+html.dark #wn-adv-table tfoot tr { background: #111; }
 #wn-adv-table tfoot td {
   padding: 8px 12px;
   font-weight: 700;
   border-top: 2px solid rgba(0,0,0,0.1);
-  background: #fff;
+  background: inherit;
   white-space: nowrap;
   position: sticky;
   bottom: 0;
   z-index: 100;
 }
-html.dark #wn-adv-table tfoot td { border-top-color: rgba(255,255,255,0.1); background: #111; }
+html.dark #wn-adv-table tfoot td { border-top-color: rgba(255,255,255,0.1); }
 
 /* ── Toolbar ────────────────────────────────────────────────────────────── */
 #wn-adv-toolbar {
