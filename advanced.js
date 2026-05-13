@@ -859,21 +859,21 @@ html.dark #wn-adv-table td { border-bottom-color: rgba(255,255,255,0.05); }
 html.dark #wn-adv-table tbody tr:hover { background: rgba(255,255,255,0.04); }
 #wn-adv-table tfoot,
 #wn-adv-table tfoot tr {
-  background: #fff;
+  background: #f0f0f0;
 }
 html.dark #wn-adv-table tfoot,
-html.dark #wn-adv-table tfoot tr { background: #111; }
+html.dark #wn-adv-table tfoot tr { background: #1e1e1e; }
 #wn-adv-table tfoot td {
   padding: 8px 12px;
   font-weight: 700;
   border-top: 2px solid rgba(0,0,0,0.1);
-  background: #fff;
+  background: #f0f0f0;
   white-space: nowrap;
   position: sticky;
   bottom: 0;
   z-index: 100;
 }
-html.dark #wn-adv-table tfoot td { border-top-color: rgba(255,255,255,0.1); background: #111; }
+html.dark #wn-adv-table tfoot td { border-top-color: rgba(255,255,255,0.1); background: #1e1e1e; }
 
 /* ── Toolbar ────────────────────────────────────────────────────────────── */
 #wn-adv-toolbar {
