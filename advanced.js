@@ -1408,8 +1408,13 @@ html.dark .wn-adv-play-btn:hover { color: #c8c0ff; }
       // Check eligibility: LIVESTREAM channel only, within 60 days
       const channel = chanCi2 >= 0 ? (row[chanCi2] || '') : '';
       const rawTs   = createdRawCi >= 0 ? (row[createdRawCi] || '') : '';
-      const ageMs   = rawTs ? (Date.now() - new Date(rawTs).getTime()) : 0;
-      const expired = rawTs && ageMs > 60 * 24 * 60 * 60 * 1000;
+      let expired = false;
+      if (rawTs) {
+        const orderDay = new Date(rawTs); orderDay.setHours(0,0,0,0);
+        const expiryDay = new Date(orderDay.getTime() + 60 * 24 * 60 * 60 * 1000);
+        const todayDay = new Date(); todayDay.setHours(0,0,0,0);
+        expired = expiryDay <= todayDay;
+      }
       const notLive = channel && channel !== 'Live Auction';
       const unavailable = expired || notLive;
       playBtn.disabled = unavailable;

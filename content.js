@@ -281,8 +281,13 @@
     // ── Update video receipt button availability ──────────────────────────
     const btn = document.getElementById(BTN_ID);
     if (btn) {
-      const ageMs      = createdAt ? (Date.now() - new Date(createdAt).getTime()) : 0;
-      const expired    = createdAt && ageMs > 60 * 24 * 60 * 60 * 1000;
+      let expired = false;
+      if (createdAt) {
+        const orderDay = new Date(createdAt); orderDay.setHours(0,0,0,0);
+        const expiryDay = new Date(orderDay.getTime() + 60 * 24 * 60 * 60 * 1000);
+        const todayDay = new Date(); todayDay.setHours(0,0,0,0);
+        expired = expiryDay <= todayDay;
+      }
       const notLive    = salesChannel && salesChannel !== 'LIVESTREAM';
       const label      = btn.querySelector('#wn-btn-label');
       if (expired || notLive) {
