@@ -168,7 +168,7 @@
     if (window.Chart) { _chartJsPromise = Promise.resolve(window.Chart); return _chartJsPromise; }
     _chartJsPromise = new Promise((resolve, reject) => {
       const s = document.createElement('script');
-      s.src = 'https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js';
+      s.src = chrome.runtime.getURL('chart.umd.min.js');
       s.onload  = () => resolve(window.Chart);
       s.onerror = () => reject(new Error('Failed to load Chart.js'));
       document.head.appendChild(s);

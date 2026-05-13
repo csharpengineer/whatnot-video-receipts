@@ -32,7 +32,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["injected.js", "hls.min.js", "background.js"],
+      "resources": ["injected.js", "hls.min.js", "background.js", "chart.umd.min.js"],
       "matches": ["https://www.whatnot.com/*"]
     }
   ],
