@@ -1531,8 +1531,11 @@ html.dark .wn-adv-play-btn:hover { color: #c8c0ff; }
           const svcLower = svcName.toLowerCase();
           const isUsps  = svcLower.includes('usps') || /^9[2-4]\d{18,20}$/.test(code) || /^\d{20,22}$/.test(code);
           const isUps   = svcLower.includes('ups')  || /^1Z[A-Z0-9]{16}$/i.test(code);
+          // USPS package prefixes that work on tools.usps.com
+          const isUspsPackage = /^(9[34]\d{18}|92[0-9]{18}|420\d{5}9[2-4]\d{18})/.test(code);
           let trackingUrl = null;
-          if (code && isUsps) trackingUrl = `https://tools.usps.com/go/TrackConfirmAction?tLabels=${encodeURIComponent(code)}`;
+          if (code && isUsps && isUspsPackage) trackingUrl = `https://tools.usps.com/go/TrackConfirmAction?tLabels=${encodeURIComponent(code)}`;
+          else if (code && isUsps) trackingUrl = `https://www.17track.net/en/track#nums=${encodeURIComponent(code)}`;
           else if (code && isUps) trackingUrl = `https://www.ups.com/track?tracknum=${encodeURIComponent(code)}`;
           if (trackingUrl) {
             const a = document.createElement('a');
