@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Whatnot Video Receipt",
-  "version": "1.0",
-  "description": "Watch your video receipt (livestream recording) on Whatnot order pages.",
+  "version": "1.0.0",
+  "description": "Watch video receipts, track shipments, and browse purchase history with advanced filtering — right on Whatnot.",
   "permissions": ["downloads", "storage"],
   "background": { "service_worker": "background.js" },
   "host_permissions": [
@@ -37,6 +37,8 @@
     }
   ],
   "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
     "128": "icon128.png"
   }
 }
