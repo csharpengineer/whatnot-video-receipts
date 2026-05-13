@@ -166,13 +166,15 @@
   function loadChartJs() {
     if (_chartJsPromise) return _chartJsPromise;
     if (window.Chart) { _chartJsPromise = Promise.resolve(window.Chart); return _chartJsPromise; }
-    _chartJsPromise = new Promise((resolve, reject) => {
-      const s = document.createElement('script');
-      s.src = chrome.runtime.getURL('chart.umd.min.js');
-      s.onload  = () => resolve(window.Chart);
-      s.onerror = () => reject(new Error('Failed to load Chart.js'));
-      document.head.appendChild(s);
-    });
+    _chartJsPromise = fetch(chrome.runtime.getURL('chart.umd.min.js'))
+      .then(r => r.text())
+      .then(code => {
+        // Execute in content script context (bypasses page CSP which blocks <script> tags)
+        // eslint-disable-next-line no-new-func
+        (new Function(code))();
+        if (!window.Chart) throw new Error('Chart not defined after load');
+        return window.Chart;
+      });
     return _chartJsPromise;
   }
 
