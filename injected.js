@@ -560,6 +560,8 @@
         const shippingServiceName = shipment?.shippingServiceName || '';
         const courierLogoSmallUrl = shipment?.courierLogoSmallUrl || '';
         const itemTitle           = listing?.title || '';
+        // Wait until description field is present in cache (undefined = not yet fetched by patched query)
+        if (listing && listing.description === undefined) return false;
         const description         = listing?.description || '';
         const listingAttributes   = (listing?.listingAttributeValues || []).map(ref => {
           const node = ref?.__ref ? cache[ref.__ref] : ref;
@@ -604,7 +606,7 @@
       let attempts = 0;
       const iv = setInterval(() => {
         attempts++;
-        if (tryDispatch() || attempts > 20) clearInterval(iv);
+        if (tryDispatch() || attempts > 40) clearInterval(iv);
       }, 300);
     }
 
