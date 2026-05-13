@@ -988,6 +988,13 @@ html.dark #wn-adv-col-popover {
   flex-shrink: 0;
   display: block;
 }
+.wn-adv-item-thumb-empty {
+  background: rgba(0,0,0,0.08);
+  /* hide broken-image icon */
+  color: transparent;
+  font-size: 0;
+}
+html.dark .wn-adv-item-thumb-empty { background: rgba(255,255,255,0.1); }
 /* ── Order # link cell ────────────────────────────────────────────────── */
 .wn-adv-order-link-btn {
   background: none; border: none; cursor: pointer; padding: 0;
@@ -1177,13 +1184,16 @@ html.dark .wn-adv-order-link-btn:hover { color: #c8c0ff; }
           const thumbUrl = itemImageCi >= 0 ? (row[itemImageCi] || '') : '';
           const cell = document.createElement('div');
           cell.className = 'wn-adv-item-cell';
+          const img = document.createElement('img');
+          img.className = 'wn-adv-item-thumb';
+          img.alt = '';
           if (thumbUrl) {
-            const img = document.createElement('img');
             img.src = thumbUrl;
-            img.className = 'wn-adv-item-thumb';
-            img.alt = '';
-            cell.appendChild(img);
+          } else {
+            img.classList.add('wn-adv-item-thumb-empty');
           }
+          img.onerror = () => img.classList.add('wn-adv-item-thumb-empty');
+          cell.appendChild(img);
           cell.appendChild(highlighted(row[ci]));
           td.appendChild(cell);
           td.title = String(row[ci] ?? '');
