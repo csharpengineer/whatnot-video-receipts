@@ -1535,7 +1535,7 @@ html.dark .wn-adv-play-btn:hover { color: #c8c0ff; }
           const isUspsPackage = /^(9[34]\d{18}|92[0-9]{18}|420\d{5}9[2-4]\d{18})/.test(code);
           let trackingUrl = null;
           if (code && isUsps && isUspsPackage) trackingUrl = `https://tools.usps.com/go/TrackConfirmAction?tLabels=${encodeURIComponent(code)}`;
-          else if (code && isUsps) trackingUrl = `https://www.17track.net/en/track#nums=${encodeURIComponent(code)}`;
+          else if (code && isUsps) trackingUrl = `https://parcelsapp.com/en/tracking/${encodeURIComponent(code)}`;
           else if (code && isUps) trackingUrl = `https://www.ups.com/track?tracknum=${encodeURIComponent(code)}`;
           if (trackingUrl) {
             const a = document.createElement('a');
