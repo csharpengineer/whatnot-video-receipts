@@ -162,21 +162,15 @@
   }
 
   // ── Chart.js loader (singleton) ───────────────────────────────────────────────────────
+  // chart.umd.min.js is loaded as a content script before advanced.js, so Chart is already in scope.
   let _chartJsPromise = null;
-  let _Chart = null;
   function loadChartJs() {
     if (_chartJsPromise) return _chartJsPromise;
-    if (_Chart) { _chartJsPromise = Promise.resolve(_Chart); return _chartJsPromise; }
-    _chartJsPromise = fetch(chrome.runtime.getURL('chart.umd.min.js'))
-      .then(r => r.text())
-      .then(code => {
-        // new Function runs in the isolated world's global scope (not the page window).
-        // Append a return statement to capture the Chart constructor directly.
-        // eslint-disable-next-line no-new-func
-        _Chart = new Function(code + '; return typeof Chart !== "undefined" ? Chart : null;')();
-        if (!_Chart) throw new Error('Chart not defined after load');
-        return _Chart;
-      });
+    if (typeof Chart !== 'undefined') {
+      _chartJsPromise = Promise.resolve(Chart);
+    } else {
+      _chartJsPromise = Promise.reject(new Error('Chart.js not loaded'));
+    }
     return _chartJsPromise;
   }
 
@@ -246,7 +240,6 @@
       return canvas;
     }
 
-    const Chart = _Chart;
     const baseOpts = {
       animation: false,
       plugins: { legend: { labels: { color: textColor, font: { size: 11 } } } },
@@ -1516,7 +1509,7 @@ html.dark .wn-adv-order-link-btn:hover { color: #c8c0ff; }
         const ageStr = lastCacheTimestamp ? ` \u00b7 Updated ${formatCacheAge(lastCacheTimestamp)}` : ' \u00b7 (restored)';
         meta.textContent = countStr + ageStr;
         // Rebuild charts if currently visible
-        if (chartsPanel.classList.contains('wn-adv-charts-visible') && _Chart) {
+        if (chartsPanel.classList.contains('wn-adv-charts-visible') && typeof Chart !== 'undefined') {
           chartsPanel.innerHTML = '';
           renderCharts(displayedRows, chartsPanel);
         } else {

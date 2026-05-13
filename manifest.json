@@ -26,7 +26,7 @@
     },
     {
       "matches": ["https://www.whatnot.com/*"],
-      "js": ["advanced.js"],
+      "js": ["chart.umd.min.js", "advanced.js"],
       "run_at": "document_idle"
     }
   ],
