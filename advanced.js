@@ -1215,10 +1215,10 @@ html.dark .wn-adv-order-link-btn:hover { color: #c8c0ff; }
           cell.appendChild(img);
           const itemTextSpan = document.createElement('span');
           itemTextSpan.className = 'wn-adv-item-text';
+          itemTextSpan.title = String(row[ci] ?? '');
           itemTextSpan.appendChild(highlighted(row[ci]));
           cell.appendChild(itemTextSpan);
           td.appendChild(cell);
-          td.title = String(row[ci] ?? '');
         } else if (ci === sellerCi) {
           const username  = row[ci] || '';
           const avatarUrl = avatarCi  >= 0 ? (row[avatarCi]  || '') : '';
