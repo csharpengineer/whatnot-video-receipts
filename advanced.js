@@ -995,6 +995,25 @@ html.dark #wn-adv-col-popover {
   font-size: 0;
 }
 html.dark .wn-adv-item-thumb-empty { background: rgba(255,255,255,0.1); }
+/* ── Image hover preview ──────────────────────────────────────────────── */
+#wn-adv-img-preview {
+  position: fixed;
+  z-index: 1000010;
+  pointer-events: none;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.28);
+  border: 2px solid rgba(255,255,255,0.15);
+  background: #222;
+  display: none;
+}
+#wn-adv-img-preview img {
+  display: block;
+  width: 160px;
+  height: 160px;
+  object-fit: contain;
+  background: #fff;
+}
 /* ── Order # link cell ────────────────────────────────────────────────── */
 .wn-adv-order-link-btn {
   background: none; border: none; cursor: pointer; padding: 0;
@@ -1417,6 +1436,38 @@ html.dark .wn-adv-order-link-btn:hover { color: #c8c0ff; }
     `;
 
     document.body.appendChild(overlay);
+
+    // ── Image hover preview (singleton) ──────────────────────────────────
+    const imgPreview = document.createElement('div');
+    imgPreview.id = 'wn-adv-img-preview';
+    const imgPreviewImg = document.createElement('img');
+    imgPreviewImg.alt = '';
+    imgPreview.appendChild(imgPreviewImg);
+    overlay.appendChild(imgPreview);
+
+    overlay.addEventListener('mouseover', (e) => {
+      const el = e.target.closest('.wn-adv-item-thumb:not(.wn-adv-item-thumb-empty), .wn-adv-seller-avatar');
+      if (!el || !el.src) return;
+      imgPreviewImg.src = el.src;
+      imgPreview.style.display = 'block';
+    });
+    overlay.addEventListener('mouseout', (e) => {
+      const el = e.target.closest('.wn-adv-item-thumb:not(.wn-adv-item-thumb-empty), .wn-adv-seller-avatar');
+      if (!el) return;
+      imgPreview.style.display = 'none';
+    });
+    overlay.addEventListener('mousemove', (e) => {
+      if (imgPreview.style.display === 'none') return;
+      const PAD = 12;
+      const pw = 164, ph = 164; // preview size + border
+      let x = e.clientX + PAD;
+      let y = e.clientY + PAD;
+      if (x + pw > window.innerWidth)  x = e.clientX - pw - PAD;
+      if (y + ph > window.innerHeight) y = e.clientY - ph - PAD;
+      imgPreview.style.left = x + 'px';
+      imgPreview.style.top  = y + 'px';
+    });
+
     const body      = overlay.querySelector('#wn-adv-body');
     const meta      = overlay.querySelector('#wn-adv-meta');
     const reloadBtn = overlay.querySelector('#wn-adv-btn-reload');
