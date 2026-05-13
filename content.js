@@ -430,7 +430,9 @@
         if (document.getElementById('wn-item-meta')) return true;
         const strongs = document.querySelectorAll('strong');
         for (const strong of strongs) {
-          if (strong.textContent.trim() === itemTitle) {
+          const firstText = strong.childNodes[0]?.nodeType === Node.TEXT_NODE
+          ? strong.childNodes[0].textContent.trim() : strong.textContent.trim();
+        if (firstText === itemTitle) {
             const tag = document.createElement('div');
             tag.id = 'wn-item-meta';
             tag.style.cssText = 'font-size:0.8em;opacity:0.65;margin-top:2px;margin-bottom:4px';
