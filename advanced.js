@@ -1585,7 +1585,7 @@ html.dark .wn-adv-play-btn:hover { color: #c8c0ff; }
         td.dataset.ci = ci;
         if (ci === orderNumCi) {
           td.textContent = `${rowset.length} orders`;
-          td.style.cssText = 'font-size:0.72rem;opacity:0.65;white-space:nowrap';
+          td.style.cssText = 'font-size:0.72rem;white-space:nowrap';
         } else {
           td.textContent = v;
           if (isNumeric[ci]) td.style.textAlign = 'right';
