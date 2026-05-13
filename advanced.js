@@ -1009,8 +1009,8 @@ html.dark .wn-adv-item-thumb-empty { background: rgba(255,255,255,0.1); }
 }
 #wn-adv-img-preview img {
   display: block;
-  width: 160px;
-  height: 160px;
+  width: 240px;
+  height: 240px;
   object-fit: contain;
   background: #fff;
 }
@@ -1213,7 +1213,10 @@ html.dark .wn-adv-order-link-btn:hover { color: #c8c0ff; }
           }
           img.onerror = () => img.classList.add('wn-adv-item-thumb-empty');
           cell.appendChild(img);
-          cell.appendChild(highlighted(row[ci]));
+          const itemTextSpan = document.createElement('span');
+          itemTextSpan.className = 'wn-adv-item-text';
+          itemTextSpan.appendChild(highlighted(row[ci]));
+          cell.appendChild(itemTextSpan);
           td.appendChild(cell);
           td.title = String(row[ci] ?? '');
         } else if (ci === sellerCi) {
@@ -1445,21 +1448,33 @@ html.dark .wn-adv-order-link-btn:hover { color: #c8c0ff; }
     imgPreview.appendChild(imgPreviewImg);
     overlay.appendChild(imgPreview);
 
+    function hoverTarget(e) {
+      // Item text span → use the thumbnail from the same cell
+      const textSpan = e.target.closest('.wn-adv-item-text');
+      if (textSpan) {
+        const thumb = textSpan.closest('.wn-adv-item-cell')?.querySelector('.wn-adv-item-thumb:not(.wn-adv-item-thumb-empty)');
+        return thumb || null;
+      }
+      // Seller avatar
+      return e.target.closest('.wn-adv-seller-avatar');
+    }
     overlay.addEventListener('mouseover', (e) => {
-      const el = e.target.closest('.wn-adv-item-thumb:not(.wn-adv-item-thumb-empty), .wn-adv-seller-avatar');
+      const el = hoverTarget(e);
       if (!el || !el.src) return;
       imgPreviewImg.src = el.src;
       imgPreview.style.display = 'block';
     });
     overlay.addEventListener('mouseout', (e) => {
-      const el = e.target.closest('.wn-adv-item-thumb:not(.wn-adv-item-thumb-empty), .wn-adv-seller-avatar');
-      if (!el) return;
+      // Hide when leaving text span or avatar
+      const textSpan = e.target.closest('.wn-adv-item-text');
+      const avatar   = e.target.closest('.wn-adv-seller-avatar');
+      if (!textSpan && !avatar) return;
       imgPreview.style.display = 'none';
     });
     overlay.addEventListener('mousemove', (e) => {
       if (imgPreview.style.display === 'none') return;
       const PAD = 12;
-      const pw = 164, ph = 164; // preview size + border
+      const pw = 244, ph = 244; // preview size + border
       let x = e.clientX + PAD;
       let y = e.clientY + PAD;
       if (x + pw > window.innerWidth)  x = e.clientX - pw - PAD;
