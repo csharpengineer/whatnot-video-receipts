@@ -72,6 +72,36 @@
   }
 }`;
 
+  function delay(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  async function sendRuntimeMessageWithRetry(msg, maxAttempts = 3) {
+    let lastErr = null;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      const result = await new Promise((resolve) => {
+        chrome.runtime.sendMessage(msg, (resp) => {
+          const errMsg = chrome.runtime.lastError?.message || null;
+          resolve({ resp, errMsg });
+        });
+      });
+
+      if (!result.errMsg) {
+        if (result.resp?.error) throw new Error(result.resp.error);
+        return result.resp?.data;
+      }
+
+      lastErr = result.errMsg;
+      const canRetry = result.errMsg.includes('Receiving end does not exist');
+      if (!canRetry || attempt === maxAttempts) break;
+
+      // MV3 service workers can be temporarily unavailable; brief retry usually succeeds.
+      await delay(250 * attempt);
+    }
+
+    throw new Error(lastErr || 'Unknown runtime messaging error');
+  }
+
   // ── Fetch all orders via GQL, paginating if needed ───────────────────────
   async function fetchAllOrders(onProgress) {
     const GQL_URL = 'https://www.whatnot.com/services/graphql/?operationName=GetMyPurchases';
@@ -80,22 +110,16 @@
     let hasNextPage = true;
 
     while (hasNextPage) {
-      const data = await new Promise((resolve, reject) => {
-        chrome.runtime.sendMessage({
-          type: 'WN_FETCH',
-          url: GQL_URL,
-          method: 'POST',
-          headers: buildHeaders(),
-          body: JSON.stringify({
-            operationName: 'GetMyPurchases',
-            variables: { first: 2000, after: cursor },
-            query: GQL_QUERY,
-          }),
-        }, (resp) => {
-          if (chrome.runtime.lastError) return reject(new Error(chrome.runtime.lastError.message));
-          if (resp?.error) return reject(new Error(resp.error));
-          resolve(resp.data);
-        });
+      const data = await sendRuntimeMessageWithRetry({
+        type: 'WN_FETCH',
+        url: GQL_URL,
+        method: 'POST',
+        headers: buildHeaders(),
+        body: JSON.stringify({
+          operationName: 'GetMyPurchases',
+          variables: { first: 2000, after: cursor },
+          query: GQL_QUERY,
+        }),
       });
 
       const page = data?.data?.myOrders;
