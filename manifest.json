@@ -3,6 +3,7 @@
   "name": "Whatnot Video Receipt",
   "version": "1.0.1",
   "description": "Watch video receipts, track shipments, and browse purchase history with advanced filtering — right on Whatnot.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAuP+7f2QK9rb8WFtQO2cCYVYF9HxIqalwIgsV/1upvCifVcQp9fw0fUBWj3fPqFZ5V72NOIHiHbmql9OVzoiTahk5xpIR3rDgtOyODpTH/jtlO4Xz2Y4y7EL1nHjsxMR2FtWDQFfRqJrGaBBVj+EUV+ptQHiBvYhi2DmqURbbmBAkrweUHsdvtIrVYBNo8RgLtOIXvxmWPxLhWGdkgkjNg0babc5FT4wJHa7CjYHmy4M83ypAJa9Ky3zxf+8nxD17sf4m3tGG/SVKZDLPKs7PNN5vjgWiF2HEdoBST4NiUk8nMdxnSsS+Ydq32DVChoEI778AnchH5wN2/GfpJDH/sQIDAQAB",
   "permissions": ["downloads", "storage"],
   "background": { "service_worker": "background.js" },
   "host_permissions": [
