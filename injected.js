@@ -426,7 +426,7 @@
     try {
       const { initSegment, segments } = parseM3u8Segments(_cachedIndexM3u8);
       const clipStart = _cachedTimeOffset;
-      const clipEnd   = clipStart + _cachedCountdown + 5; // 30s countdown + 5s after sale
+      const clipEnd   = clipStart + _cachedCountdown + 10; // 30s countdown + 10s after sale
 
       const clipSegs = segments.filter(
         (s) => s.time < clipEnd && s.time + s.duration > clipStart

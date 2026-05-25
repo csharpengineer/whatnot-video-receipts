@@ -9,6 +9,31 @@
   const ADV_STYLE_ID      = 'wn-advanced-styles';
   const CACHE_KEY_PREFIX  = 'wn_adv_gql4_';
   const CACHE_TTL_MS      = 15 * 60 * 1000; // 15 minutes
+  const DEFAULT_SERVER_RANGE_DAYS = 60;
+
+  function getDefaultDateRange() {
+    const to = new Date();
+    to.setHours(23, 59, 59, 999);
+    const from = new Date(to.getTime() - (DEFAULT_SERVER_RANGE_DAYS * 24 * 60 * 60 * 1000));
+    from.setHours(0, 0, 0, 0);
+    return { from, to };
+  }
+
+  function normalizeDateRange(range) {
+    const from = range?.from ? new Date(range.from) : null;
+    const to = range?.to ? new Date(range.to) : null;
+    if (from) from.setHours(0, 0, 0, 0);
+    if (to) to.setHours(23, 59, 59, 999);
+    return { from, to };
+  }
+
+  function dateInputValue(d) {
+    if (!d) return '';
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
 
   // ── Build auth headers (same pattern as injected.js) ─────────────────────
   function buildHeaders() {
@@ -43,8 +68,8 @@
   }
 
   // ── GQL query for all purchases ─────────────────────────────────────────
-  const GQL_QUERY = `query GetMyPurchases($first: Int, $after: String) {
-  myOrders(first: $first, after: $after) {
+  const GQL_QUERY = `query GetMyPurchases($first: Int, $after: String, $sort: [OrderNodeSortEnum]) {
+  myOrders(first: $first, after: $after, sort: $sort) {
     pageInfo { hasNextPage endCursor __typename }
     edges { node {
       id uuid displayId createdAt status salesChannel
@@ -103,13 +128,17 @@
   }
 
   // ── Fetch all orders via GQL, paginating if needed ───────────────────────
-  async function fetchAllOrders(onProgress) {
+  async function fetchAllOrders(range, onProgress) {
     const GQL_URL = 'https://www.whatnot.com/services/graphql/?operationName=GetMyPurchases';
     let allEdges = [];
     let cursor = null;
     let hasNextPage = true;
+    let reachedLowerBound = false;
+    const normalizedRange = normalizeDateRange(range);
+    const fromMs = normalizedRange.from ? normalizedRange.from.getTime() : null;
+    const toMs = normalizedRange.to ? normalizedRange.to.getTime() : null;
 
-    while (hasNextPage) {
+    while (hasNextPage && !reachedLowerBound) {
       const data = await sendRuntimeMessageWithRetry({
         type: 'WN_FETCH',
         url: GQL_URL,
@@ -117,7 +146,11 @@
         headers: buildHeaders(),
         body: JSON.stringify({
           operationName: 'GetMyPurchases',
-          variables: { first: 2000, after: cursor },
+          variables: {
+            first: 200,
+            after: cursor,
+            sort: ['CREATED_AT_DESC'],
+          },
           query: GQL_QUERY,
         }),
       });
@@ -125,7 +158,20 @@
       const page = data?.data?.myOrders;
       if (!page) throw new Error(data?.errors?.[0]?.message || 'No order data in response');
       const edges = page.edges || [];
-      allEdges = allEdges.concat(edges);
+      const filteredEdges = [];
+      for (const edge of edges) {
+        const createdAt = edge?.node?.createdAt;
+        const createdMs = createdAt ? Date.parse(createdAt) : NaN;
+        if (!Number.isFinite(createdMs)) continue;
+        if (toMs != null && createdMs > toMs) continue;
+        if (fromMs != null && createdMs < fromMs) {
+          reachedLowerBound = true;
+          break;
+        }
+        filteredEdges.push(edge);
+      }
+
+      allEdges = allEdges.concat(filteredEdges);
       hasNextPage = page.pageInfo?.hasNextPage || false;
       cursor = page.pageInfo?.endCursor || null;
       if (onProgress) onProgress(allEdges.length);
@@ -323,14 +369,17 @@
   }
 
   // ── Cache helpers ─────────────────────────────────────────────────────────
-  function getCacheKey() {
+  function getCacheKey(range) {
     const usidMatch = document.cookie.match(/(?:^|;\s*)usid=([^;]+)/);
-    return CACHE_KEY_PREFIX + (usidMatch ? usidMatch[1] : 'default');
+    const normalized = normalizeDateRange(range);
+    const fromPart = normalized.from ? normalized.from.toISOString().slice(0, 10) : 'none';
+    const toPart = normalized.to ? normalized.to.toISOString().slice(0, 10) : 'none';
+    return `${CACHE_KEY_PREFIX}${usidMatch ? usidMatch[1] : 'default'}_${fromPart}_${toPart}`;
   }
 
-  function loadFromCache() {
+  function loadFromCache(range) {
     return new Promise((resolve) => {
-      const key = getCacheKey();
+      const key = getCacheKey(range);
       chrome.storage.local.get(key, (result) => {
         const entry = result[key];
         if (!entry || (Date.now() - entry.timestamp > CACHE_TTL_MS)) return resolve(null);
@@ -339,9 +388,9 @@
     });
   }
 
-  function saveToCache(rows) {
+  function saveToCache(rows, range) {
     return new Promise((resolve) => {
-      chrome.storage.local.set({ [getCacheKey()]: { rows, timestamp: Date.now() } }, resolve);
+      chrome.storage.local.set({ [getCacheKey(range)]: { rows, timestamp: Date.now() } }, resolve);
     });
   }
 
@@ -354,7 +403,6 @@
     const statusCi = headers.indexOf('Status');
     const catCi    = headers.indexOf('Category');
     const sellerCi = headers.indexOf('Seller');
-    const dateCi   = headers.indexOf('Date');
     const q = searchQuery.trim().toLowerCase();
     const data = rows.slice(1).filter(row => {
       if (activeFilters.channel.size  > 0 && !activeFilters.channel.has(String(row[chanCi]   ?? ''))) return false;
@@ -362,12 +410,6 @@
       if (activeFilters.status.size   > 0 && !activeFilters.status.has(String(row[statusCi]  ?? ''))) return false;
       if (activeFilters.category.size > 0 && !activeFilters.category.has(String(row[catCi]   ?? ''))) return false;
       if (activeFilters.seller.size   > 0 && !activeFilters.seller.has(String(row[sellerCi]  ?? ''))) return false;
-      if (dateRange.from || dateRange.to) {
-        const d = new Date(row[dateCi] ?? '');
-        if (isNaN(d)) return false;
-        if (dateRange.from && d < dateRange.from) return false;
-        if (dateRange.to   && d > dateRange.to)   return false;
-      }
       if (q) {
         // Check all columns that are not hidden for a match
         const anyMatch = row.some((val, ci) => {
@@ -382,7 +424,7 @@
   }
 
   // ── Build left sidebar filter panel ──────────────────────────────────────
-  function buildSidebar(allRows, sidebarEl, onRefresh) {
+  function buildSidebar(allRows, sidebarEl, onRefresh, onDateRangeChange) {
     sidebarEl.innerHTML = '';
     if (!allRows || allRows.length < 2) return;
     const headers = allRows[0];
@@ -392,8 +434,6 @@
     const statusCi = headers.indexOf('Status');
     const catCi    = headers.indexOf('Category');
     const sellerCi = headers.indexOf('Seller');
-    const dateCi   = headers.indexOf('Date');
-
     // ── Date range section ────────────────────────────────────────────────
     {
       const section = document.createElement('div');
@@ -405,29 +445,13 @@
       const fbody = document.createElement('div');
       fbody.className = 'wn-adv-filter-body wn-adv-date-body';
 
-      // Compute min/max dates from data
-      let minDate = '', maxDate = '';
-      for (const row of data) {
-        const v = String(row[dateCi] ?? '').trim();
-        if (!v) continue;
-        const iso = new Date(v).toISOString().split('T')[0];
-        if (!minDate || iso < minDate) minDate = iso;
-        if (!maxDate || iso > maxDate) maxDate = iso;
-      }
-
-      const toIso = (d) => d ? d.toISOString().split('T')[0] : '';
-
       const fromInput = document.createElement('input');
       fromInput.type = 'date'; fromInput.className = 'wn-adv-date-input';
-      fromInput.value = toIso(dateRange.from);
-      if (minDate) fromInput.min = minDate;
-      if (maxDate) fromInput.max = maxDate;
+      fromInput.value = dateInputValue(dateRange.from);
 
       const toInput = document.createElement('input');
       toInput.type = 'date'; toInput.className = 'wn-adv-date-input';
-      toInput.value = toIso(dateRange.to);
-      if (minDate) toInput.min = minDate;
-      if (maxDate) toInput.max = maxDate;
+      toInput.value = dateInputValue(dateRange.to);
 
       const clearBtn = document.createElement('button');
       clearBtn.className = 'wn-adv-filter-clear' + ((dateRange.from || dateRange.to) ? ' visible' : '');
@@ -436,19 +460,19 @@
         dateRange.from = null; dateRange.to = null;
         fromInput.value = ''; toInput.value = '';
         clearBtn.classList.remove('visible');
-        onRefresh();
+        onDateRangeChange();
       });
 
       fromInput.addEventListener('change', () => {
         dateRange.from = fromInput.value ? new Date(fromInput.value + 'T00:00:00') : null;
         clearBtn.classList.toggle('visible', !!(dateRange.from || dateRange.to));
-        onRefresh();
+        onDateRangeChange();
       });
       toInput.addEventListener('change', () => {
         // End of day for "to" so the selected date is inclusive
         dateRange.to = toInput.value ? new Date(toInput.value + 'T23:59:59') : null;
         clearBtn.classList.toggle('visible', !!(dateRange.from || dateRange.to));
-        onRefresh();
+        onDateRangeChange();
       });
 
       const fromLabel = document.createElement('label');
@@ -1286,7 +1310,7 @@ html.dark .wn-adv-play-btn:hover { color: #c8c0ff; }
   let hiddenCols        = new Set(DEFAULT_HIDDEN);
   let savedOverlayState = null; // { scrollTop } — set by goToOrder, consumed on back-navigate restore
   let activeFilters     = { channel: new Set(), txType: new Set(), status: new Set(), category: new Set(), seller: new Set() };
-  let dateRange         = { from: null, to: null }; // Date objects or null
+  let dateRange         = getDefaultDateRange(); // Date objects or null
   let searchQuery       = ''; // free-text search across all visible columns
 
   // ── Render the parsed CSV rows into the overlay body ──────────────────────
@@ -1849,20 +1873,21 @@ html.dark .wn-adv-play-btn:hover { color: #c8c0ff; }
           <p class="wn-adv-sub">${force ? 'Fetching from Whatnot…' : 'Checking cache…'}</p>
         </div>`;
       try {
+        const requestedRange = normalizeDateRange(dateRange);
         let rows, timestamp;
         if (!force) {
-          const cached = await loadFromCache();
+          const cached = await loadFromCache(requestedRange);
           if (cached) { rows = cached.rows; timestamp = cached.timestamp; }
         }
         if (!rows) {
           const sub = body.querySelector('.wn-adv-sub');
           if (sub) sub.textContent = 'Fetching from Whatnot\u2026';
-          const edges = await fetchAllOrders((count) => {
+          const edges = await fetchAllOrders(requestedRange, (count) => {
             if (sub) sub.textContent = `Fetching orders… (${count.toLocaleString()} so far)`;
           });
           rows = gqlEdgesToRows(edges);
           timestamp = Date.now();
-          await saveToCache(rows);
+          await saveToCache(rows, requestedRange);
         }
         currentRows        = rows;
         lastCacheTimestamp = timestamp;
@@ -1967,7 +1992,9 @@ html.dark .wn-adv-play-btn:hover { color: #c8c0ff; }
         }
       }
 
-      buildSidebar(rows, sidebar, refresh);
+      buildSidebar(rows, sidebar, refresh, () => {
+        loadOrders(false);
+      });
       refresh();
       if (scrollTop > 0) requestAnimationFrame(() => {
         const wrapEl = document.getElementById('wn-adv-table-wrap');
@@ -1998,7 +2025,7 @@ html.dark .wn-adv-play-btn:hover { color: #c8c0ff; }
     currentRows   = null;
     displayedRows = null;
     activeFilters = { channel: new Set(), txType: new Set(), status: new Set(), category: new Set(), seller: new Set() };
-    dateRange     = { from: null, to: null };
+    dateRange     = getDefaultDateRange();
     searchQuery   = '';
     // If URL is still the fake path, navigate back
     if (window.location.pathname === ADV_FAKE_PATH) {
