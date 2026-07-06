@@ -5,18 +5,56 @@
 .PARAMETER Target
     The target browser: "chrome" (default) or "firefox".
 
+.PARAMETER Crx
+    Chrome only. Also produce a signed .crx (for self-hosted/dashboard upload)
+    using the private key at -KeyPath, in addition to the .zip.
+
+.PARAMETER KeyPath
+    Path to the private .pem used to sign the .crx. Defaults to the key
+    checked out alongside this repo. Must match the "key" already baked
+    into manifest.json, or the packed .crx will get a different extension
+    ID than what's currently installed/published.
+
+.PARAMETER ChromePath
+    Path to chrome.exe, used only when -Crx is passed. Defaults to the
+    standard Chrome install location.
+
 .EXAMPLE
     .\pack.ps1
     .\pack.ps1 -Target firefox
-    .\pack.ps1 -Target chrome
+    .\pack.ps1 -Target chrome -Crx
 #>
 
 param(
     [ValidateSet("chrome", "firefox")]
-    [string]$Target = "chrome"
+    [string]$Target = "chrome",
+
+    [switch]$Crx,
+
+    [string]$KeyPath = (Join-Path $PSScriptRoot "..\whatnot-video-receipts-keys\whatnot-video-receipt-20260516-083255-private.pem"),
+
+    [string]$ChromePath = "C:\Program Files\Google\Chrome\Application\chrome.exe"
 )
 
 $ErrorActionPreference = "Stop"
+
+if ($Crx -and $Target -ne "chrome") {
+    throw "-Crx is only valid with -Target chrome"
+}
+
+if ($Crx -and -not (Test-Path $KeyPath)) {
+    throw "Private key not found at $KeyPath. Pass -KeyPath to point at the signing key."
+}
+
+if ($Crx -and -not (Test-Path $ChromePath)) {
+    throw "chrome.exe not found at $ChromePath. Pass -ChromePath to point at your Chrome install."
+}
+
+# chrome.exe --pack-extension-key fails silently ("Failed to read private key")
+# on paths containing "..", so resolve to a fully-qualified path up front.
+if ($Crx) {
+    $KeyPath = (Resolve-Path $KeyPath).Path
+}
 
 # Files to include in the package (relative to repo root)
 $files = @(
@@ -90,8 +128,38 @@ if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 [System.IO.Compression.ZipFile]::CreateFromDirectory($stageDir, $zipPath)
 
-# Clean up stage
-Remove-Item $stageDir -Recurse -Force
-
 Write-Host ""
 Write-Host "Packaged for $Target -> dist\$zipName"
+
+# Sign a .crx from the same stage contents
+if ($Crx) {
+    $crxName     = "whatnot-video-receipts-v$version-$Target.crx"
+    $crxPath     = Join-Path $distDir $crxName
+    $stageCrx    = "$stageDir.crx"
+    $stagePem    = "$stageDir.pem"
+
+    if (Test-Path $stageCrx) { Remove-Item $stageCrx -Force }
+
+    & $ChromePath "--pack-extension=$stageDir" "--pack-extension-key=$KeyPath" | Out-Null
+
+    # Wait for Chrome to finish writing the .crx (it runs and exits asynchronously)
+    $waited = 0
+    while (-not (Test-Path $stageCrx) -and $waited -lt 20) {
+        Start-Sleep -Milliseconds 500
+        $waited++
+    }
+    if (-not (Test-Path $stageCrx)) {
+        throw "chrome.exe did not produce $stageCrx"
+    }
+
+    if (Test-Path $crxPath) { Remove-Item $crxPath -Force }
+    Move-Item $stageCrx $crxPath
+
+    # Chrome only writes a .pem here if $KeyPath didn't already exist; shouldn't happen, but don't leave stray keys in dist/
+    if (Test-Path $stagePem) { Remove-Item $stagePem -Force }
+
+    Write-Host "Signed        -> dist\$crxName"
+}
+
+# Clean up stage
+Remove-Item $stageDir -Recurse -Force
