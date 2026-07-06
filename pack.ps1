@@ -43,17 +43,27 @@ $ErrorActionPreference = "Stop"
 
 $defaultRelativeKeyPath = (Join-Path $PSScriptRoot "..\whatnot-video-receipts-keys\whatnot-video-receipt-20260516-083255-private.pem")
 $legacyWindowsKeyPath   = "C:\Users\psiki\source\repos\whatnot-video-receipts-keys\whatnot-video-receipt-20260516-083255-private.pem"
+$explicitKeyPathProvided = $PSBoundParameters.ContainsKey("KeyPath")
 
 if ($Crx -and $Target -ne "chrome") {
     throw "-Crx is only valid with -Target chrome"
 }
 
-if ($Crx -and -not (Test-Path $KeyPath) -and -not $PSBoundParameters.ContainsKey("KeyPath") -and (Test-Path $legacyWindowsKeyPath)) {
-    $KeyPath = $legacyWindowsKeyPath
+if ($Crx) {
+    $defaultKeyExists = Test-Path $defaultRelativeKeyPath
+    $legacyKeyExists  = Test-Path $legacyWindowsKeyPath
+
+    if (-not $explicitKeyPathProvided -and -not $defaultKeyExists -and $legacyKeyExists) {
+        $KeyPath = $legacyWindowsKeyPath
+    }
 }
 
 if ($Crx -and -not (Test-Path $KeyPath)) {
-    throw "Private key not found. Checked path: $KeyPath. When -KeyPath is omitted, this script uses these default locations: $defaultRelativeKeyPath and $legacyWindowsKeyPath. Pass -KeyPath to point at the signing key."
+    if ($explicitKeyPathProvided) {
+        throw "Private key not found at $KeyPath. Pass -KeyPath to point at the signing key."
+    }
+
+    throw "Private key not found. Checked default locations: $defaultRelativeKeyPath (exists: $defaultKeyExists), $legacyWindowsKeyPath (exists: $legacyKeyExists). Pass -KeyPath to point at the signing key."
 }
 
 if ($Crx -and -not (Test-Path $ChromePath)) {
