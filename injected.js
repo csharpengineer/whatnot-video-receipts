@@ -109,8 +109,10 @@
       }
 
       // ── Fetch master m3u8 to get the VOD index URL ───────────────────────
+      // Presigned CDN URL (auth via op_param token, not cookies); the CDN serves
+      // Access-Control-Allow-Origin: * which rejects credentialed requests.
       const masterResp = await fetch(videoReceipt.videoUrl, {
-        credentials: 'include',
+        credentials: 'omit',
       });
       const masterM3u8 = await masterResp.text();
 
@@ -131,7 +133,7 @@
       const indexUrl = 'https://api.whatnot.com' + indexUriMatch[1];
 
       // ── Fetch the VOD index m3u8 to get the time offset ────────────────────
-      const indexResp = await fetch(indexUrl, { credentials: 'include' });
+      const indexResp = await fetch(indexUrl, { credentials: 'omit' });
       const indexM3u8 = await indexResp.text();
 
       // Extract TIME-OFFSET (position of sale moment minus countdown)
