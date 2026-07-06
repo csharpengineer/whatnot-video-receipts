@@ -11,9 +11,12 @@
 
 .PARAMETER KeyPath
     Path to the private .pem used to sign the .crx. Defaults to the key
-    checked out alongside this repo. Must match the "key" already baked
-    into manifest.json, or the packed .crx will get a different extension
-    ID than what's currently installed/published.
+    checked out alongside this repo in ..\whatnot-video-receipts-keys.
+    On the original dev machine this was:
+    C:\Users\psiki\source\repos\whatnot-video-receipts-keys\...
+    Must match the "key" already baked into manifest.json, or the packed
+    .crx will get a different extension ID than what's currently
+    installed/published.
 
 .PARAMETER ChromePath
     Path to chrome.exe, used only when -Crx is passed. Defaults to the
@@ -38,12 +41,19 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+$defaultRelativeKeyPath = (Join-Path $PSScriptRoot "..\whatnot-video-receipts-keys\whatnot-video-receipt-20260516-083255-private.pem")
+$legacyWindowsKeyPath   = "C:\Users\psiki\source\repos\whatnot-video-receipts-keys\whatnot-video-receipt-20260516-083255-private.pem"
+
 if ($Crx -and $Target -ne "chrome") {
     throw "-Crx is only valid with -Target chrome"
 }
 
+if ($Crx -and -not (Test-Path $KeyPath) -and $KeyPath -eq $defaultRelativeKeyPath -and (Test-Path $legacyWindowsKeyPath)) {
+    $KeyPath = $legacyWindowsKeyPath
+}
+
 if ($Crx -and -not (Test-Path $KeyPath)) {
-    throw "Private key not found at $KeyPath. Pass -KeyPath to point at the signing key."
+    throw "Private key not found at $KeyPath. Expected default location: $defaultRelativeKeyPath (legacy machine path: $legacyWindowsKeyPath). Pass -KeyPath to point at the signing key."
 }
 
 if ($Crx -and -not (Test-Path $ChromePath)) {
