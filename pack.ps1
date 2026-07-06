@@ -48,12 +48,12 @@ if ($Crx -and $Target -ne "chrome") {
     throw "-Crx is only valid with -Target chrome"
 }
 
-if ($Crx -and -not (Test-Path $KeyPath) -and $KeyPath -eq $defaultRelativeKeyPath -and (Test-Path $legacyWindowsKeyPath)) {
+if ($Crx -and -not (Test-Path $KeyPath) -and -not $PSBoundParameters.ContainsKey("KeyPath") -and (Test-Path $legacyWindowsKeyPath)) {
     $KeyPath = $legacyWindowsKeyPath
 }
 
 if ($Crx -and -not (Test-Path $KeyPath)) {
-    throw "Private key not found at $KeyPath. Expected default location: $defaultRelativeKeyPath (legacy machine path: $legacyWindowsKeyPath). Pass -KeyPath to point at the signing key."
+    throw "Private key not found. Checked path: $KeyPath. Default locations: $defaultRelativeKeyPath and $legacyWindowsKeyPath. Pass -KeyPath to point at the signing key."
 }
 
 if ($Crx -and -not (Test-Path $ChromePath)) {
