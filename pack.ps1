@@ -53,7 +53,7 @@ if ($Crx -and -not (Test-Path $KeyPath) -and -not $PSBoundParameters.ContainsKey
 }
 
 if ($Crx -and -not (Test-Path $KeyPath)) {
-    throw "Private key not found. Checked path: $KeyPath. If -KeyPath is not passed, defaults are checked in this order: $defaultRelativeKeyPath, then $legacyWindowsKeyPath. Pass -KeyPath to point at the signing key."
+    throw "Private key not found. Checked path: $KeyPath. When -KeyPath is omitted, this script uses these default locations: $defaultRelativeKeyPath and $legacyWindowsKeyPath. Pass -KeyPath to point at the signing key."
 }
 
 if ($Crx -and -not (Test-Path $ChromePath)) {
